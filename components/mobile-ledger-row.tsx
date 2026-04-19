@@ -4,6 +4,7 @@ import { cn, formatCurrency, formatDate } from "@/lib/utils";
 export function MobileLedgerRow({
   row,
   customerName,
+  canDelete = true,
 }: {
   row: {
     id: string;
@@ -14,6 +15,7 @@ export function MobileLedgerRow({
     balance: number;
   };
   customerName: string;
+  canDelete?: boolean;
 }) {
   const isBaaki = row.type === "BAAKI";
 
@@ -66,9 +68,15 @@ export function MobileLedgerRow({
             {row.description || (isBaaki ? "Goods taken" : "Payment received")}
           </p>
         </div>
-        <div className="mt-3 flex justify-end">
-          <DeleteLedgerEntryButton entryId={row.id} customerName={customerName} />
-        </div>
+        {canDelete ? (
+          <div className="mt-3 flex justify-end">
+            <DeleteLedgerEntryButton
+              entryId={row.id}
+              customerName={customerName}
+              canDelete={canDelete}
+            />
+          </div>
+        ) : null}
       </div>
     </details>
   );

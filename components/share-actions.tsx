@@ -10,11 +10,13 @@ export function ShareActions({
   customerName,
   amount,
   access,
+  embedded = false,
 }: {
   customerId: string;
   customerName: string;
   amount: number;
   access: FeatureAccess;
+  embedded?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [shareLink, setShareLink] = useState("");
@@ -98,7 +100,14 @@ export function ShareActions({
   }
 
   return (
-    <div className="compact-section-spacing rounded-3xl border border-line bg-paper p-3 sm:p-4">
+    <div
+      className={[
+        "compact-section-spacing rounded-3xl p-3 sm:p-4",
+        embedded
+          ? "border border-line/75 bg-white/75"
+          : "border border-line bg-paper",
+      ].join(" ")}
+    >
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-ink">Share with customer</p>
         {!access.allowed ? <PremiumBadge /> : null}

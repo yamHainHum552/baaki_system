@@ -13,9 +13,11 @@ type ShareComponent = React.ComponentType<{
   customerName: string;
   amount: number;
   access: FeatureAccess;
+  embedded?: boolean;
 }>;
 
 export function CustomerLedgerActions({
+  insights,
   customerId,
   customerName,
   currentBalance,
@@ -25,6 +27,11 @@ export function CustomerLedgerActions({
   ReminderButton,
   ShareActions,
 }: {
+  insights: Array<{
+    label: string;
+    value: string;
+    tone?: "khata" | "moss" | "ink";
+  }>;
   customerId: string;
   customerName: string;
   currentBalance: number;
@@ -35,57 +42,37 @@ export function CustomerLedgerActions({
   ShareActions: ShareComponent;
 }) {
   return (
-    <div id="ledger-actions" className="compact-section-spacing mb-4">
-      <details className="rounded-[22px] border border-line bg-paper md:hidden">
-        <summary className="cursor-pointer list-none px-3 py-3 text-sm font-semibold text-ink">
-          More actions
-        </summary>
-        <div className="compact-section-spacing border-t border-line px-3 py-3">
-          <div className="grid grid-cols-2 gap-2">
-            {canExportCsv(entitlements) ? (
-              <a
-                href={`/api/export/customer-ledger?customerId=${customerId}&format=csv`}
-                className="button-secondary text-center"
-              >
-                CSV
-              </a>
-            ) : (
-              <div className="soft-panel flex items-center justify-center gap-2 px-3 py-2 text-xs text-ink/60">
-                <PremiumBadge />
-                CSV locked
-              </div>
-            )}
-            {canExportPdf(entitlements) ? (
-              <a
-                href={`/api/export/customer-ledger?customerId=${customerId}&format=pdf`}
-                target="_blank"
-                rel="noreferrer"
-                className="button-secondary text-center"
-              >
-                Print
-              </a>
-            ) : (
-              <div className="soft-panel flex items-center justify-center gap-2 px-3 py-2 text-xs text-ink/60">
-                <PremiumBadge />
-                PDF locked
-              </div>
-            )}
+    <div
+      id="ledger-actions"
+      className="compact-section-spacing rounded-[26px] border border-line/80 bg-paper/70 p-3 sm:p-4"
+    >
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+        {insights.map((insight) => (
+          <div
+            key={insight.label}
+            className="rounded-[22px] border border-line/80 bg-white/80 px-3 py-3"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/45">
+              {insight.label}
+            </p>
+            <p
+              className={[
+                "mt-2 text-sm font-semibold sm:text-[15px]",
+                insight.tone === "khata"
+                  ? "text-khata"
+                  : insight.tone === "moss"
+                    ? "text-moss"
+                    : "text-ink",
+              ].join(" ")}
+            >
+              {insight.value}
+            </p>
           </div>
-          <ReminderButton
-            customerId={customerId}
-            enabled={canManageSms && hasPhone}
-            access={entitlements.featureAccess.sms_reminders}
-          />
-          <ShareActions
-            customerId={customerId}
-            customerName={customerName}
-            amount={currentBalance}
-            access={entitlements.featureAccess.customer_share}
-          />
-        </div>
-      </details>
+        ))}
+      </div>
 
-      <div className="hidden stack-grid sm:grid-cols-2 xl:grid-cols-3 md:grid">
+      <div className="rounded-[24px] border border-line/75 bg-warm/55 p-2.5 sm:p-3">
+        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
         {canExportCsv(entitlements) ? (
           <a
             href={`/api/export/customer-ledger?customerId=${customerId}&format=csv`}
@@ -121,14 +108,16 @@ export function CustomerLedgerActions({
             access={entitlements.featureAccess.sms_reminders}
           />
         </div>
+        </div>
       </div>
 
-      <div className="hidden md:block">
+      <div>
         <ShareActions
           customerId={customerId}
           customerName={customerName}
           amount={currentBalance}
           access={entitlements.featureAccess.customer_share}
+          embedded
         />
       </div>
     </div>

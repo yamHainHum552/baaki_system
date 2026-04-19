@@ -13,9 +13,11 @@ type LedgerRow = {
 export function CustomerLedgerTable({
   rows,
   customerName,
+  canDelete = true,
 }: {
   rows: LedgerRow[];
   customerName: string;
+  canDelete?: boolean;
 }) {
   return (
     <div className="hidden overflow-x-auto md:block">
@@ -50,7 +52,11 @@ export function CustomerLedgerTable({
               {formatCurrency(row.balance)}
             </div>
             <div className="text-center">
-              <DeleteLedgerEntryButton entryId={row.id} customerName={customerName} />
+              <DeleteLedgerEntryButton
+                entryId={row.id}
+                customerName={customerName}
+                canDelete={canDelete}
+              />
             </div>
           </div>
         ))}

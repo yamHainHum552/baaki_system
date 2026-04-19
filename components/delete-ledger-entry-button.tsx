@@ -8,11 +8,13 @@ import { useToast } from "@/components/toast-provider";
 interface DeleteLedgerEntryButtonProps {
   entryId: string;
   customerName: string;
+  canDelete?: boolean;
 }
 
 export function DeleteLedgerEntryButton({
   entryId,
   customerName,
+  canDelete = true,
 }: DeleteLedgerEntryButtonProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
@@ -28,6 +30,10 @@ export function DeleteLedgerEntryButton({
       });
     }
   };
+
+  if (!canDelete) {
+    return null;
+  }
 
   return (
     <>

@@ -208,7 +208,10 @@ export async function startTrialAction() {
 }
 
 export async function deleteLedgerEntryAction(formData: FormData) {
-  const { supabase, store } = await requireStoreContext();
+  const { supabase, store } = await requireStoreRole(
+    "OWNER",
+    "/customers?error=Only%20owners%20can%20delete%20ledger%20entries",
+  );
 
   const entryId = String(formData.get("entry_id") ?? "");
   const confirmation = String(formData.get("confirmation") ?? "");
@@ -306,8 +309,26 @@ export async function deleteCustomerAction(formData: FormData) {
   );
 
   const customerId = String(formData.get("customer_id") ?? "");
+  const confirmation = String(formData.get("confirmation") ?? "").trim();
 
   try {
+    const { data: customer, error: customerError } = await supabase
+      .from("customers")
+      .select("name")
+      .eq("id", customerId)
+      .eq("store_id", store.id)
+      .single();
+
+    if (customerError || !customer) {
+      throw new Error("Customer not found.");
+    }
+
+    if (confirmation !== customer.name) {
+      redirect(
+        `/customers/${customerId}?error=${encodeURIComponent(`Type "${customer.name}" to confirm deletion.`)}`,
+      );
+    }
+
     // Check if there are ledger entries
     const { count, error: countError } = await supabase
       .from("ledger_entries")
@@ -337,7 +358,7 @@ export async function deleteCustomerAction(formData: FormData) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to delete customer.";
-    redirect(`/customers?error=${encodeURIComponent(message)}`);
+    redirect(`/customers/${customerId}?error=${encodeURIComponent(message)}`);
   }
 
   clearCache(`dashboard:${store.id}`);

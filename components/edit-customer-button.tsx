@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { deleteCustomerAction, updateCustomerAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
+import { useToast } from "@/components/toast-provider";
 
 interface EditCustomerButtonProps {
   customerId: string;
@@ -18,6 +19,19 @@ export function EditCustomerButton({
   address
 }: EditCustomerButtonProps) {
   const [open, setOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
+  const { pushToast } = useToast();
+
+  const handleDeleteSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (confirmation !== customerName) {
+      event.preventDefault();
+      pushToast({
+        title: "Confirmation needed",
+        description: `Please type "${customerName}" to confirm deletion.`,
+        tone: "error",
+      });
+    }
+  };
 
   return (
     <>
@@ -151,16 +165,27 @@ export function EditCustomerButton({
                     This only works when the customer has no ledger entries.
                   </p>
 
-                  <form action={deleteCustomerAction} className="mt-4">
+                  <form action={deleteCustomerAction} className="mt-4" onSubmit={handleDeleteSubmit}>
                     <input
                       type="hidden"
                       name="customer_id"
                       value={customerId}
                     />
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-red-600/80">
+                      Type customer name to confirm
+                    </label>
+                    <input
+                      name="confirmation"
+                      type="text"
+                      value={confirmation}
+                      onChange={(event) => setConfirmation(event.target.value)}
+                      placeholder={`Type "${customerName}"`}
+                      className="bg-white"
+                    />
                     <SubmitButton
                       idle="Delete customer"
                       pending="Deleting..."
-                      className="w-full rounded-2xl bg-red-500 px-5 py-3 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-70"
+                      className="mt-3 w-full rounded-2xl bg-red-500 px-5 py-3 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-70"
                     />
                   </form>
                 </div>

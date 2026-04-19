@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { BaakiLoader } from "@/components/baaki-loader";
 import { useToast } from "@/components/toast-provider";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,8 @@ export function QuickEntryForm({
   mode: Mode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -38,11 +41,19 @@ export function QuickEntryForm({
   const [isOnline, setIsOnline] = useState(true);
   const [listeningDescription, setListeningDescription] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isModePending, setIsModePending] = useState(false);
+  const [isRouting, startTransition] = useTransition();
   const { pushToast } = useToast();
 
   useEffect(() => {
     setMode(initialMode);
   }, [initialMode]);
+
+  useEffect(() => {
+    if (initialMode === mode) {
+      setIsModePending(false);
+    }
+  }, [initialMode, mode]);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -69,6 +80,20 @@ export function QuickEntryForm({
     () => (mode === "baaki" ? "BAAKI" : "PAYMENT"),
     [mode],
   );
+
+  function updateMode(nextMode: Mode) {
+    if (nextMode === mode) {
+      return;
+    }
+
+    setMode(nextMode);
+    setIsModePending(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("mode", nextMode);
+    startTransition(() => {
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    });
+  }
 
   function appendKey(value: string) {
     setAmount((current) => {
@@ -206,11 +231,21 @@ export function QuickEntryForm({
   }
 
   return (
-    <div className="section-spacing">
+    <div className="relative section-spacing">
+      {isModePending || isRouting ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-[28px] bg-paper/88 backdrop-blur-sm">
+          <BaakiLoader
+            compact
+            label={mode === "baaki" ? "Switching to Baaki" : "Switching to Payment"}
+            detail="Refreshing the quick entry form..."
+          />
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2 sm:gap-4">
         <button
           type="button"
-          onClick={() => setMode("baaki")}
+          onClick={() => updateMode("baaki")}
           className={cn(
             "rounded-3xl px-3 py-3 text-center text-sm font-semibold transition sm:px-5 sm:py-4 sm:text-base",
             mode === "baaki"
@@ -222,7 +257,7 @@ export function QuickEntryForm({
         </button>
         <button
           type="button"
-          onClick={() => setMode("payment")}
+          onClick={() => updateMode("payment")}
           className={cn(
             "rounded-3xl px-3 py-3 text-center text-sm font-semibold transition sm:px-5 sm:py-4 sm:text-base",
             mode === "payment"
@@ -248,7 +283,7 @@ export function QuickEntryForm({
           />
         </div>
 
-        <div className="soft-panel p-3">
+        <div className="soft-panel p-3 lg:hidden">
           <div>
             <p className="text-sm font-semibold text-ink">Quick keypad</p>
             <p className="text-[11px] text-ink/60">
