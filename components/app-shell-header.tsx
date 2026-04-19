@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOutAction } from "@/app/actions";
+import { BrandLogo } from "@/components/brand-logo";
 import { SubmitButton } from "@/components/submit-button";
 import { StoreSwitcher } from "@/components/store-switcher";
 import { cn, formatEntitlementPlanLabel } from "@/lib/utils";
@@ -42,6 +43,13 @@ export function AppShellHeader({
     return (
       <header className="surface-panel p-3 sm:p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <BrandLogo markSize={34} compact className="shrink-0" />
+            <div className="min-w-0 lg:hidden">
+              <p className="truncate text-sm font-semibold text-ink">{store.name}</p>
+              <p className="text-xs text-ink/55">{store.role}</p>
+            </div>
+          </div>
           <nav
             className={`grid gap-3 ${
               navItems.length >= 4 ? "grid-cols-2 sm:grid-cols-4" : navItems.length === 3 ? "grid-cols-3" : "grid-cols-2"
@@ -83,9 +91,7 @@ export function AppShellHeader({
     <header className="surface-panel p-4 sm:p-5 lg:p-6">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-khata">
-            Baaki
-          </p>
+          <BrandLogo markSize={40} compact className="max-w-max" />
           <h1 className="mt-2 truncate font-serif text-2xl text-ink sm:text-3xl">
             {store.name}
           </h1>

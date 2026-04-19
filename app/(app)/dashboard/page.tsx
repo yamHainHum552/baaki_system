@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requestPremiumPlanAction, startTrialAction } from "@/app/actions";
 import { CollapsibleSection } from "@/components/collapsible-section";
+import { InstallAppCard } from "@/components/install-app-card";
 import { PremiumBadge } from "@/components/premium-badge";
 import { SubmitButton } from "@/components/submit-button";
 import { RiskBadge } from "@/components/risk-badge";
@@ -35,6 +36,8 @@ export default async function DashboardPage({
 
   return (
     <div className="section-spacing">
+      <InstallAppCard />
+
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-3 xl:gap-6">
         <div className="stat-card">
           <p className="text-xs text-ink/65 sm:text-sm">Total baaki</p>

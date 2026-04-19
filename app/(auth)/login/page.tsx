@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { signInAction } from "@/app/actions";
+import { BrandLogo } from "@/components/brand-logo";
 import { PasskeySignInButton } from "@/components/passkey-sign-in-button";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -13,8 +14,8 @@ export default async function LoginPage({
   return (
     <main className="page-shell items-center justify-center">
       <div className="w-full max-w-md rounded-[32px] border border-line bg-warm p-6 shadow-ledger">
-        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-khata">Baaki</p>
-        <h1 className="mt-3 font-serif text-3xl text-ink">Digital khata for your shop</h1>
+        <BrandLogo markSize={52} />
+        <h1 className="mt-4 font-serif text-3xl text-ink">Digital khata for your shop</h1>
         <p className="mt-2 text-sm text-ink/70">
           Record baaki and payments just like the red notebook on your counter.
         </p>
