@@ -1,5 +1,4 @@
 import { AppShellHeader } from "@/components/app-shell-header";
-import { StoreContextProvider } from "@/components/store-context-provider";
 import { requireStoreContext } from "@/lib/auth";
 
 export default async function AppLayout({
@@ -11,10 +10,8 @@ export default async function AppLayout({
 
   return (
     <main className="page-shell">
-      <StoreContextProvider store={store}>
-        <AppShellHeader store={store} />
-        <div className="mt-6">{children}</div>
-      </StoreContextProvider>
+      <AppShellHeader store={store} />
+      <div className="mt-6">{children}</div>
     </main>
   );
 }

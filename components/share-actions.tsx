@@ -2,23 +2,24 @@
 
 import { PremiumBadge } from "@/components/premium-badge";
 import { useToast } from "@/components/toast-provider";
-import { useFeatureAccess } from "@/lib/use-feature-access";
+import type { FeatureAccess } from "@/lib/entitlements";
 import { useMemo, useState } from "react";
 
 export function ShareActions({
   customerId,
   customerName,
-  amount
+  amount,
+  access,
 }: {
   customerId: string;
   customerName: string;
   amount: number;
+  access: FeatureAccess;
 }) {
   const [copied, setCopied] = useState(false);
   const [shareLink, setShareLink] = useState("");
   const [message, setMessage] = useState("");
   const [creatingLink, setCreatingLink] = useState(false);
-  const access = useFeatureAccess("customer_share");
   const { pushToast } = useToast();
   const shareText = useMemo(
     () => `${customerName} ko Rs. ${Math.round(amount)} baaki cha.`,

@@ -2,19 +2,20 @@
 
 import { PremiumBadge } from "@/components/premium-badge";
 import { useToast } from "@/components/toast-provider";
-import { useFeatureAccess } from "@/lib/use-feature-access";
 import { useState } from "react";
+import type { FeatureAccess } from "@/lib/entitlements";
 
 export function SendReminderButton({
   customerId,
-  enabled
+  enabled,
+  access,
 }: {
   customerId: string;
   enabled: boolean;
+  access: FeatureAccess;
 }) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const access = useFeatureAccess("sms_reminders");
   const { pushToast } = useToast();
 
   async function handleClick() {

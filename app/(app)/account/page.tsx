@@ -1,8 +1,13 @@
+import dynamic from "next/dynamic";
 import { SectionCard } from "@/components/section-card";
-import { PasskeySecurityCard } from "@/components/passkey-security-card";
 import { getUser, requireStoreContext } from "@/lib/auth";
 import type { UserPasskey } from "@/lib/passkeys";
 import { listVisibleUserPasskeys } from "@/lib/passkeys";
+
+const PasskeySecurityCard = dynamic(
+  () => import("@/components/passkey-security-card").then((mod) => mod.PasskeySecurityCard),
+  { loading: () => <div className="soft-panel p-4 text-sm text-ink/65">Loading passkey settings...</div> },
+);
 
 export default async function AccountPage() {
   const { store } = await requireStoreContext();

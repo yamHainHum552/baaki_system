@@ -31,86 +31,62 @@ export function AppShellHeader({
   };
 }) {
   const pathname = usePathname();
-  const isCustomerArea = pathname.startsWith("/customers");
   const navItems = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
     { href: "/account", label: "Account" },
     ...(store.role === "OWNER" ? [{ href: "/settings", label: "Settings" }] : []),
   ];
-
-  if (isCustomerArea) {
-    return (
-      <header className="surface-panel p-3 sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3">
-            <BrandLogo markSize={34} compact className="shrink-0" />
-            <div className="min-w-0 lg:hidden">
-              <p className="truncate text-sm font-semibold text-ink">{store.name}</p>
-              <p className="text-xs text-ink/55">{store.role}</p>
-            </div>
-          </div>
-          <nav
-            className={`grid gap-3 ${
-              navItems.length >= 4 ? "grid-cols-2 sm:grid-cols-4" : navItems.length === 3 ? "grid-cols-3" : "grid-cols-2"
-            } sm:max-w-2xl`}
-          >
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "rounded-2xl border border-line bg-paper px-4 py-3 text-center text-sm font-semibold text-ink transition hover:bg-white",
-                  pathname === item.href ? "bg-white shadow-sm" : "",
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <StoreSwitcher
-              stores={store.memberships}
-              currentStoreId={store.id}
-            />
-            <form action={signOutAction}>
-              <SubmitButton
-                idle="Sign out"
-                pending="Signing out..."
-                className="button-secondary w-full sm:w-auto"
-              />
-            </form>
-          </div>
-        </div>
-      </header>
-    );
-  }
+  const roleLabel = store.role === "OWNER" ? "Owner" : "Staff";
+  const accountLabel = store.name.trim().charAt(0).toUpperCase() || "B";
 
   return (
-    <header className="surface-panel p-4 sm:p-5 lg:p-6">
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-        <div className="min-w-0">
-          <BrandLogo markSize={40} compact className="max-w-max" />
-          <h1 className="mt-2 truncate font-serif text-2xl text-ink sm:text-3xl">
-            {store.name}
-          </h1>
-          <p className="mt-2 text-sm text-ink/65 sm:text-base">
-            {store.role === "OWNER"
-              ? "Simple shop khata. Record now, collect later."
-              : "Staff workspace for daily khata work."}{" "}
-            {store.role} -{" "}
-            {store.entitlements.isTrialing
-              ? store.entitlements.displayPlanLabel
-              : formatEntitlementPlanLabel(store.subscription.plan_type)}
-          </p>
+    <header className="surface-panel p-3 sm:p-4 lg:p-5">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <BrandLogo markSize={38} compact className="shrink-0" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-ink sm:text-base">{store.name}</p>
+            <p className="mt-0.5 text-xs text-ink/55">
+              {roleLabel} ·{" "}
+              {store.entitlements.isTrialing
+                ? store.entitlements.displayPlanLabel
+                : formatEntitlementPlanLabel(store.subscription.plan_type)}
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-3 xl:items-end">
-          <StoreSwitcher
-            stores={store.memberships}
-            currentStoreId={store.id}
-          />
+        <nav className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:flex xl:flex-wrap xl:justify-center">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "rounded-2xl border border-transparent px-4 py-2.5 text-center text-sm font-semibold text-ink/72 transition hover:bg-paper hover:text-ink",
+                pathname === item.href
+                  ? "border-line bg-paper text-ink shadow-sm"
+                  : "bg-transparent",
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:justify-end">
+          <StoreSwitcher stores={store.memberships} currentStoreId={store.id} />
+          <Link
+            href="/account"
+            className="soft-panel flex items-center gap-3 px-3 py-2.5 transition hover:bg-white"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-khata text-sm font-semibold text-white shadow-sm">
+              {accountLabel}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-ink">Profile</span>
+              <span className="block truncate text-xs text-ink/55">{roleLabel}</span>
+            </span>
+          </Link>
           <form action={signOutAction}>
             <SubmitButton
               idle="Sign out"
@@ -120,21 +96,6 @@ export function AppShellHeader({
           </form>
         </div>
       </div>
-
-      <nav className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:flex">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "rounded-2xl border border-line bg-paper px-4 py-3 text-center text-sm font-semibold text-ink hover:bg-white sm:px-5",
-              pathname === item.href ? "bg-white shadow-sm" : "",
-            )}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
     </header>
   );
 }

@@ -1,8 +1,13 @@
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { signInAction } from "@/app/actions";
 import { BrandLogo } from "@/components/brand-logo";
-import { PasskeySignInButton } from "@/components/passkey-sign-in-button";
 import { SubmitButton } from "@/components/submit-button";
+
+const PasskeySignInButton = dynamic(
+  () => import("@/components/passkey-sign-in-button").then((mod) => mod.PasskeySignInButton),
+  { loading: () => <div className="button-secondary w-full text-center">Loading biometric sign-in...</div> },
+);
 
 export default async function LoginPage({
   searchParams,

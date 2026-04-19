@@ -1,7 +1,7 @@
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { requestPremiumPlanAction, startTrialAction } from "@/app/actions";
 import { CollapsibleSection } from "@/components/collapsible-section";
-import { InstallAppCard } from "@/components/install-app-card";
 import { PremiumBadge } from "@/components/premium-badge";
 import { SubmitButton } from "@/components/submit-button";
 import { RiskBadge } from "@/components/risk-badge";
@@ -19,6 +19,11 @@ import {
   formatPlanStatusLabel,
   formatTrialCountdown,
 } from "@/lib/utils";
+
+const InstallAppCard = dynamic(
+  () => import("@/components/install-app-card").then((mod) => mod.InstallAppCard),
+  {},
+);
 
 export default async function DashboardPage({
   searchParams,

@@ -1,5 +1,3 @@
-"use client";
-
 import { cn, formatNumber, formatUsageLimit } from "@/lib/utils";
 
 export function UsageProgress({

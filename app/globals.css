@@ -83,6 +83,31 @@ button {
   @apply rounded-[20px] border border-line/80 bg-paper/95 backdrop-blur sm:rounded-[24px];
 }
 
+.icon-button {
+  @apply inline-flex items-center justify-center rounded-2xl border border-line bg-paper text-ink transition hover:-translate-y-px hover:bg-white;
+}
+
+.floating-menu {
+  @apply rounded-[22px] border border-line/90 bg-white/95 p-2 shadow-[0_20px_44px_rgba(82,40,27,0.16)] backdrop-blur;
+}
+
+.customer-list-stack {
+  isolation: isolate;
+}
+
+.dialog-backdrop {
+  background:
+    radial-gradient(circle at top, rgba(251, 247, 240, 0.08), transparent 24%),
+    rgba(36, 27, 20, 0.48);
+}
+
+.dialog-panel {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.78), transparent 32%),
+    linear-gradient(180deg, rgba(251, 247, 240, 0.99) 0%, rgba(239, 226, 209, 0.99) 100%);
+  @apply rounded-[30px] border border-line shadow-[0_28px_70px_rgba(82,40,27,0.22)];
+}
+
 .toast-card {
   @apply flex items-start gap-3 rounded-[24px] border px-4 py-3 shadow-ledger backdrop-blur;
   background:
