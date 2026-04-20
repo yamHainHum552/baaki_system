@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createCustomer, listCustomersWithBalance } from "@/lib/baaki";
 import { logSubscriptionEvent } from "@/lib/billing";
-import { getStoreContextForApi, getStoreContextForApiWithRole } from "@/lib/auth";
+import {
+  getStoreContextForApi,
+  getStoreContextForApiWithPermission,
+} from "@/lib/auth";
 import { clearCache } from "@/lib/cache";
 import { toPremiumErrorPayload } from "@/lib/premium-errors";
 
@@ -29,9 +32,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  let context: Awaited<ReturnType<typeof getStoreContextForApiWithRole>> | null = null;
+  let context: Awaited<ReturnType<typeof getStoreContextForApiWithPermission>> | null = null;
   try {
-    context = await getStoreContextForApiWithRole("OWNER");
+    context = await getStoreContextForApiWithPermission("manage_customers");
     if ("error" in context) {
       return NextResponse.json({ error: context.error }, { status: context.status });
     }

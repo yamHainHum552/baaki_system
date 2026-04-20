@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getCashFlowForecast,
   getCustomerInsights,
@@ -54,6 +55,22 @@ export type DashboardSummary = {
   topDebtors: TopDebtorRow[];
   forecast: CashFlowForecast;
   entitlements: StoreEntitlements;
+};
+
+export type MultiStoreOverview = {
+  stores: Array<{
+    storeId: string;
+    storeName: string;
+    planType: "free" | "premium_monthly" | "premium_yearly";
+    totalCustomers: number;
+    totalBaaki: number;
+    highDueCount: number;
+    lastEntryAt: string | null;
+    isCurrentStore: boolean;
+  }>;
+  totalCustomers: number;
+  totalBaaki: number;
+  highDueCount: number;
 };
 
 export async function listCustomersWithBalance(
@@ -281,6 +298,92 @@ export async function createLedgerEntry(
   }
 
   return data;
+}
+
+export async function getOwnedStoresOverview(userId: string, currentStoreId: string) {
+  const adminClient = createAdminClient();
+  const { data: memberships, error: membershipError } = await adminClient
+    .from("store_memberships")
+    .select("store_id, role, stores(id, name, risk_threshold)")
+    .eq("user_id", userId)
+    .eq("role", "OWNER");
+
+  if (membershipError) {
+    throw new Error(membershipError.message);
+  }
+
+  const rows = (memberships ?? []).filter(
+    (membership: any) => membership.stores && !Array.isArray(membership.stores),
+  );
+  const storeIds = rows.map((membership: any) => membership.store_id);
+
+  if (!storeIds.length) {
+    return null;
+  }
+
+  const [{ data: balances, error: balanceError }, { data: subscriptions, error: subscriptionError }] =
+    await Promise.all([
+      adminClient
+        .from("customer_balances")
+        .select("store_id, balance, last_entry_at")
+        .in("store_id", storeIds),
+      adminClient
+        .from("subscriptions")
+        .select("store_id, plan_type")
+        .in("store_id", storeIds),
+    ]);
+
+  if (balanceError) {
+    throw new Error(balanceError.message);
+  }
+  if (subscriptionError) {
+    throw new Error(subscriptionError.message);
+  }
+
+  const balanceGroups = new Map<string, Array<{ balance: number; last_entry_at: string | null }>>();
+  for (const row of balances ?? []) {
+    const current = balanceGroups.get(row.store_id) ?? [];
+    current.push({
+      balance: Number(row.balance ?? 0),
+      last_entry_at: row.last_entry_at ?? null,
+    });
+    balanceGroups.set(row.store_id, current);
+  }
+  const subscriptionMap = new Map((subscriptions ?? []).map((row) => [row.store_id, row.plan_type]));
+
+  const stores = rows.map((membership: any) => {
+    const balancesForStore = balanceGroups.get(membership.store_id) ?? [];
+    const riskThreshold = Number(membership.stores.risk_threshold ?? 1000);
+    const lastEntryAt = balancesForStore.reduce<string | null>((latest, row) => {
+      if (!row.last_entry_at) {
+        return latest;
+      }
+
+      if (!latest || new Date(row.last_entry_at).getTime() > new Date(latest).getTime()) {
+        return row.last_entry_at;
+      }
+
+      return latest;
+    }, null);
+
+    return {
+      storeId: membership.store_id,
+      storeName: membership.stores.name,
+      planType: (subscriptionMap.get(membership.store_id) ?? "free") as "free" | "premium_monthly" | "premium_yearly",
+      totalCustomers: balancesForStore.length,
+      totalBaaki: balancesForStore.reduce((sum, row) => sum + row.balance, 0),
+      highDueCount: balancesForStore.filter((row) => row.balance >= riskThreshold).length,
+      lastEntryAt,
+      isCurrentStore: membership.store_id === currentStoreId,
+    };
+  });
+
+  return {
+    stores,
+    totalCustomers: stores.reduce((sum, store) => sum + store.totalCustomers, 0),
+    totalBaaki: stores.reduce((sum, store) => sum + store.totalBaaki, 0),
+    highDueCount: stores.reduce((sum, store) => sum + store.highDueCount, 0),
+  } satisfies MultiStoreOverview;
 }
 
 export function getRiskSummary(customer: {

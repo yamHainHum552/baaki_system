@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import { incrementStoreUsage, requireFeatureAccess } from "@/lib/entitlements";
 import { logSubscriptionEvent } from "@/lib/billing";
 import { getCustomerLedger } from "@/lib/baaki";
-import { getStoreContextForApi } from "@/lib/auth";
+import { getStoreContextForApiWithPermission } from "@/lib/auth";
 import { toPremiumErrorPayload } from "@/lib/premium-errors";
 import { customerLedgerToCsv, customerLedgerToPrintableHtml } from "@/lib/export";
 
 export async function GET(request: Request) {
-  let context: Awaited<ReturnType<typeof getStoreContextForApi>> | null = null;
+  let context: Awaited<ReturnType<typeof getStoreContextForApiWithPermission>> | null = null;
   try {
-    context = await getStoreContextForApi();
+    context = await getStoreContextForApiWithPermission("export_customer_ledger");
     if ("error" in context) {
       return NextResponse.json({ error: context.error }, { status: context.status });
     }

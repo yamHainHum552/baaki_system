@@ -21,7 +21,11 @@ export default async function SuperAdminBillingEventsPage() {
                     <AdminStatusBadge label={event.status} tone={event.status === "received" ? "amber" : "moss"} />
                   </div>
                   <p className="mt-1 text-xs text-ink/60">
-                    {event.stores?.name ?? "No store linked"} • {formatLongDate(event.received_at)}
+                    {event.stores?.name ?? "No store linked"} / {formatLongDate(event.received_at)}
+                  </p>
+                  <p className="mt-1 text-xs text-ink/55">
+                    {event.provider_reference ?? "No provider reference"}
+                    {event.processing_result ? ` / ${event.processing_result}` : ""}
                   </p>
                 </div>
                 <details className="w-full xl:max-w-xl">

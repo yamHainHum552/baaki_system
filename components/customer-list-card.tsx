@@ -15,10 +15,10 @@ type CustomerListItem = {
 
 export function CustomerListCard({
   customer,
-  isOwner,
+  canManageCustomers,
 }: {
   customer: CustomerListItem;
-  isOwner: boolean;
+  canManageCustomers: boolean;
 }) {
   return (
     <div className="soft-panel relative z-0 p-3 sm:p-4">
@@ -60,7 +60,7 @@ export function CustomerListCard({
         <CustomerCardMenu
           customerId={customer.customer_id}
           customerPhone={customer.phone}
-          isOwner={isOwner}
+          canManageCustomers={canManageCustomers}
         />
       </div>
     </div>

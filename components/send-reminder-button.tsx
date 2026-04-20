@@ -78,7 +78,7 @@ export function SendReminderButton({
       ) : null}
       {!enabled ? (
         <p className="text-xs text-ink/55">
-          Customer phone number and owner access are required.
+          Customer phone number and staff reminder access are required.
         </p>
       ) : null}
       {message ? <p className="text-xs text-ink/65">{message}</p> : null}

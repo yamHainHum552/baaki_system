@@ -6,8 +6,17 @@ import { redirect } from "next/navigation";
 import { clearCache } from "@/lib/cache";
 import { startStoreTrial } from "@/lib/billing";
 import { createCustomer, createLedgerEntry } from "@/lib/baaki";
-import { getUser, requireStoreContext, requireStoreRole } from "@/lib/auth";
+import {
+  getUser,
+  requireStoreContext,
+  requireStorePermission,
+  requireStoreRole,
+} from "@/lib/auth";
 import { canAddMoreStaff, getStoreEntitlements } from "@/lib/entitlements";
+import {
+  DEFAULT_STAFF_PERMISSIONS,
+  normalizeStorePermissions,
+} from "@/lib/store-permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findAuthUserByEmail } from "@/lib/team";
 import { parseAmount, toEntryTimestamp } from "@/lib/utils";
@@ -66,6 +75,22 @@ export async function createStoreAction(formData: FormData) {
     redirect("/setup?error=Store%20name%20is%20required");
   }
 
+  const { data: existingProfile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, store_id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    redirect(`/setup?error=${encodeURIComponent(profileError.message)}`);
+  }
+
+  if (existingProfile?.store_id) {
+    redirect(
+      "/setup?error=This%20account%20has%20already%20been%20linked%20to%20a%20store%20workspace.%20It%20cannot%20create%20a%20new%20store.",
+    );
+  }
+
   const { data: storeId, error: storeError } = await supabase.rpc(
     "create_store_for_current_user",
     {
@@ -86,9 +111,9 @@ export async function createStoreAction(formData: FormData) {
 }
 
 export async function createCustomerAction(formData: FormData) {
-  const { supabase, store } = await requireStoreRole(
-    "OWNER",
-    "/customers?error=Only%20owners%20can%20add%20customers",
+  const { supabase, store } = await requireStorePermission(
+    "manage_customers",
+    "/customers?error=You%20do%20not%20have%20permission%20to%20add%20customers",
   );
 
   try {
@@ -110,7 +135,10 @@ export async function createCustomerAction(formData: FormData) {
 }
 
 export async function createLedgerEntryAction(formData: FormData) {
-  const { supabase, store } = await requireStoreContext();
+  const { supabase, store } = await requireStorePermission(
+    "manage_ledger",
+    "/dashboard?error=You%20do%20not%20have%20permission%20to%20write%20ledger%20entries",
+  );
 
   const customerId = String(formData.get("customer_id") ?? "");
   const type = String(formData.get("type") ?? "") as "BAAKI" | "PAYMENT";
@@ -208,9 +236,9 @@ export async function startTrialAction() {
 }
 
 export async function deleteLedgerEntryAction(formData: FormData) {
-  const { supabase, store } = await requireStoreRole(
-    "OWNER",
-    "/customers?error=Only%20owners%20can%20delete%20ledger%20entries",
+  const { supabase, store } = await requireStorePermission(
+    "manage_ledger",
+    "/customers?error=You%20do%20not%20have%20permission%20to%20delete%20ledger%20entries",
   );
 
   const entryId = String(formData.get("entry_id") ?? "");
@@ -268,9 +296,9 @@ export async function deleteLedgerEntryAction(formData: FormData) {
 }
 
 export async function updateCustomerAction(formData: FormData) {
-  const { supabase, store } = await requireStoreRole(
-    "OWNER",
-    "/customers?error=Only%20owners%20can%20edit%20customers",
+  const { supabase, store } = await requireStorePermission(
+    "manage_customers",
+    "/customers?error=You%20do%20not%20have%20permission%20to%20edit%20customers",
   );
 
   const customerId = String(formData.get("customer_id") ?? "");
@@ -303,9 +331,9 @@ export async function updateCustomerAction(formData: FormData) {
 }
 
 export async function deleteCustomerAction(formData: FormData) {
-  const { supabase, store } = await requireStoreRole(
-    "OWNER",
-    "/customers?error=Only%20owners%20can%20delete%20customers",
+  const { supabase, store } = await requireStorePermission(
+    "manage_customers",
+    "/customers?error=You%20do%20not%20have%20permission%20to%20delete%20customers",
   );
 
   const customerId = String(formData.get("customer_id") ?? "");
@@ -419,6 +447,7 @@ export async function addStaffMemberAction(formData: FormData) {
       user_id: targetUser.id,
       role: "STAFF",
       is_default: false,
+      permissions: DEFAULT_STAFF_PERMISSIONS,
     });
 
     if (error) {
@@ -522,4 +551,57 @@ export async function removeStaffMemberAction(formData: FormData) {
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   redirect("/settings?message=Staff%20member%20removed");
+}
+
+export async function updateStaffPermissionsAction(formData: FormData) {
+  const { supabase, store } = await requireStoreRole(
+    "OWNER",
+    "/settings?error=Only%20owners%20can%20manage%20staff",
+  );
+
+  const staffUserId = String(formData.get("staff_user_id") ?? "").trim();
+  const permissions = normalizeStorePermissions(formData.getAll("permissions"));
+
+  if (!staffUserId) {
+    redirect("/settings?error=Staff%20member%20is%20required");
+  }
+
+  try {
+    const { data: membership, error: membershipError } = await supabase
+      .from("store_memberships")
+      .select("role")
+      .eq("store_id", store.id)
+      .eq("user_id", staffUserId)
+      .maybeSingle();
+
+    if (membershipError) {
+      throw new Error(membershipError.message);
+    }
+
+    if (!membership || membership.role !== "STAFF") {
+      throw new Error("Staff membership was not found.");
+    }
+
+    const { error } = await supabase
+      .from("store_memberships")
+      .update({
+        permissions,
+      })
+      .eq("store_id", store.id)
+      .eq("user_id", staffUserId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to update staff permissions.";
+    redirect(`/settings?error=${encodeURIComponent(message)}`);
+  }
+
+  clearCache(`dashboard:${store.id}`);
+  clearCache(`customers:${store.id}`);
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+  redirect("/settings?message=Staff%20permissions%20updated");
 }

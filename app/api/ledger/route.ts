@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { createLedgerEntry } from "@/lib/baaki";
-import { getStoreContextForApiWithRole } from "@/lib/auth";
+import { getStoreContextForApiWithPermission } from "@/lib/auth";
 import { clearCache } from "@/lib/cache";
 
 export async function POST(request: Request) {
   try {
-    const context = await getStoreContextForApiWithRole("STAFF");
+    const context = await getStoreContextForApiWithPermission("manage_ledger");
     if ("error" in context) {
       return NextResponse.json({ error: context.error }, { status: context.status });
     }

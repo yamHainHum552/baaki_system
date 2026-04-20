@@ -34,6 +34,17 @@ export type StoreSubscription = {
   feature_flags: Record<string, boolean>;
   billing_provider: string | null;
   provider_subscription_id: string | null;
+  provider_payment_id: string | null;
+  provider_reference_id: string | null;
+  plan_code: string | null;
+  amount: number | null;
+  currency: string | null;
+  payment_initiated_at: string | null;
+  payment_verified_at: string | null;
+  raw_metadata: Record<string, unknown>;
+  created_by_user_id: string | null;
+  verified_by_system: boolean;
+  last_provider_event_at: string | null;
 };
 
 export type StoreUsage = {
@@ -82,6 +93,10 @@ export type StoreEntitlements = {
 type PlanDefinition = {
   label: string;
   billingCycle: BillingCycle;
+  amountMinor: number;
+  currency: string;
+  durationMonths: number;
+  isLive: boolean;
   limits: {
     customers: number;
     staff: number;
@@ -98,6 +113,10 @@ export const PLAN_DEFINITIONS: Record<PlanType, PlanDefinition> = {
   free: {
     label: "Free",
     billingCycle: "none",
+    amountMinor: 0,
+    currency: "NPR",
+    durationMonths: 0,
+    isLive: true,
     limits: {
       customers: 50,
       staff: 1,
@@ -119,6 +138,10 @@ export const PLAN_DEFINITIONS: Record<PlanType, PlanDefinition> = {
   premium_monthly: {
     label: "Premium Monthly",
     billingCycle: "monthly",
+    amountMinor: Number(process.env.BILLING_PREMIUM_MONTHLY_AMOUNT_PAISA ?? 29900),
+    currency: "NPR",
+    durationMonths: 1,
+    isLive: String(process.env.BILLING_ENABLE_MONTHLY ?? "false") === "true",
     limits: {
       customers: 1000000,
       staff: 25,
@@ -140,6 +163,10 @@ export const PLAN_DEFINITIONS: Record<PlanType, PlanDefinition> = {
   premium_yearly: {
     label: "Premium Yearly",
     billingCycle: "yearly",
+    amountMinor: Number(process.env.BILLING_PREMIUM_YEARLY_AMOUNT_PAISA ?? 299900),
+    currency: "NPR",
+    durationMonths: 12,
+    isLive: true,
     limits: {
       customers: 1000000,
       staff: 25,
@@ -182,6 +209,17 @@ export function buildDefaultSubscription(storeId: string): StoreSubscription {
     feature_flags: {},
     billing_provider: null,
     provider_subscription_id: null,
+    provider_payment_id: null,
+    provider_reference_id: null,
+    plan_code: null,
+    amount: null,
+    currency: "NPR",
+    payment_initiated_at: null,
+    payment_verified_at: null,
+    raw_metadata: {},
+    created_by_user_id: null,
+    verified_by_system: false,
+    last_provider_event_at: null,
   };
 }
 
@@ -200,7 +238,7 @@ export async function getStoreSubscription(supabase: any, storeId: string): Prom
   const { data, error } = await supabase
     .from("subscriptions")
     .select(
-      "store_id, plan, customer_limit, plan_type, plan_status, premium_enabled, trial_started_at, trial_ends_at, subscription_starts_at, subscription_ends_at, grace_ends_at, billing_cycle, max_customers, max_staff, max_sms_per_month, max_exports_per_month, max_share_links_per_month, feature_flags, billing_provider, provider_subscription_id",
+      "store_id, plan, customer_limit, plan_type, plan_status, premium_enabled, trial_started_at, trial_ends_at, subscription_starts_at, subscription_ends_at, grace_ends_at, billing_cycle, max_customers, max_staff, max_sms_per_month, max_exports_per_month, max_share_links_per_month, feature_flags, billing_provider, provider_subscription_id, provider_payment_id, provider_reference_id, plan_code, amount, currency, payment_initiated_at, payment_verified_at, raw_metadata, created_by_user_id, verified_by_system, last_provider_event_at",
     )
     .eq("store_id", storeId)
     .maybeSingle();
@@ -234,6 +272,17 @@ export async function getStoreSubscription(supabase: any, storeId: string): Prom
     feature_flags: (data.feature_flags ?? {}) as Record<string, boolean>,
     billing_provider: data.billing_provider ?? null,
     provider_subscription_id: data.provider_subscription_id ?? null,
+    provider_payment_id: data.provider_payment_id ?? null,
+    provider_reference_id: data.provider_reference_id ?? null,
+    plan_code: data.plan_code ?? null,
+    amount: data.amount == null ? null : Number(data.amount),
+    currency: data.currency ?? "NPR",
+    payment_initiated_at: data.payment_initiated_at ?? null,
+    payment_verified_at: data.payment_verified_at ?? null,
+    raw_metadata: (data.raw_metadata ?? {}) as Record<string, unknown>,
+    created_by_user_id: data.created_by_user_id ?? null,
+    verified_by_system: Boolean(data.verified_by_system),
+    last_provider_event_at: data.last_provider_event_at ?? null,
   } satisfies StoreSubscription;
 
   return subscription;
@@ -301,12 +350,16 @@ export function resolveStoreEntitlements(
   const now = new Date();
   const trialEndsAt = subscription.trial_ends_at ? new Date(subscription.trial_ends_at) : null;
   const graceEndsAt = subscription.grace_ends_at ? new Date(subscription.grace_ends_at) : null;
+  const subscriptionEndsAt = subscription.subscription_ends_at
+    ? new Date(subscription.subscription_ends_at)
+    : null;
   const trialActive = subscription.plan_status === "trialing" && trialEndsAt != null && trialEndsAt > now;
   const trialExpired = subscription.plan_status === "trialing" && trialEndsAt != null && trialEndsAt <= now;
   const premiumByPlan =
     subscription.plan_status === "active" &&
     (subscription.plan_type === "premium_monthly" || subscription.plan_type === "premium_yearly") &&
-    subscription.premium_enabled;
+    subscription.premium_enabled &&
+    (subscriptionEndsAt == null || subscriptionEndsAt > now);
   const premiumDuringGrace =
     subscription.plan_status === "past_due" && graceEndsAt != null && graceEndsAt > now;
   const isPremium = trialActive || premiumByPlan || premiumDuringGrace;

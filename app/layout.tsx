@@ -1,20 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Literata, Manrope } from "next/font/google";
 import { Suspense } from "react";
 import { PwaRegister } from "@/components/pwa-register";
 import { ToastProvider } from "@/components/toast-provider";
 import { UrlToastSync } from "@/components/url-toast-sync";
 import "./globals.css";
-
-const headingFont = Literata({
-  variable: "--font-heading",
-  subsets: ["latin"]
-});
-
-const bodyFont = Manrope({
-  variable: "--font-body",
-  subsets: ["latin"]
-});
 
 export const metadata: Metadata = {
   metadataBase: process.env.NEXT_PUBLIC_APP_URL
@@ -48,10 +37,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en"
-      className={`${headingFont.variable} ${bodyFont.variable}`}
-    >
+    <html lang="en">
       <body className="font-[var(--font-body)]">
         <ToastProvider>
           <PwaRegister />

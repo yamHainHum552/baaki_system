@@ -8,6 +8,7 @@ import { MobileLedgerRow } from "@/components/mobile-ledger-row";
 import { StickyMobileActionBar } from "@/components/sticky-mobile-action-bar";
 import { getCustomerLedger } from "@/lib/baaki";
 import { requireStoreContext } from "@/lib/auth";
+import { hasStorePermission } from "@/lib/store-permissions";
 import {
   formatDays,
   formatLongDate,
@@ -42,6 +43,31 @@ export default async function CustomerLedgerPage({
   const query = await searchParams;
   const mode = query.mode === "payment" ? "payment" : "baaki";
   const page = Number(query.page ?? "1");
+  const canManageCustomers = hasStorePermission(
+    store.role,
+    store.permissions,
+    "manage_customers",
+  );
+  const canManageLedger = hasStorePermission(
+    store.role,
+    store.permissions,
+    "manage_ledger",
+  );
+  const canSendSms = hasStorePermission(
+    store.role,
+    store.permissions,
+    "send_sms_reminders",
+  );
+  const canShareLedger = hasStorePermission(
+    store.role,
+    store.permissions,
+    "share_customer_ledger",
+  );
+  const canExportLedger = hasStorePermission(
+    store.role,
+    store.permissions,
+    "export_customer_ledger",
+  );
   const { customer, rows, currentBalance, insights, pagination } =
     await getCustomerLedger(supabase, id, {
       page,
@@ -61,7 +87,7 @@ export default async function CustomerLedgerPage({
         daysSinceLastPayment={insights.days_since_last_payment}
         actions={
           <>
-            {store.role === "OWNER" ? (
+            {canManageCustomers ? (
               <EditCustomerButton
                 customerId={id}
                 customerName={customer.name}
@@ -81,7 +107,13 @@ export default async function CustomerLedgerPage({
               subtitle="Fast keypad, offline queue, and voice input."
               defaultOpen
             >
-              <QuickEntryForm customerId={id} mode={mode} />
+              {canManageLedger ? (
+                <QuickEntryForm customerId={id} mode={mode} />
+              ) : (
+                <div className="soft-panel p-4 text-sm text-ink/65">
+                  Your owner has limited ledger-entry access for this staff account.
+                </div>
+              )}
             </CollapsibleSection>
           </div>
         </div>
@@ -123,7 +155,9 @@ export default async function CustomerLedgerPage({
               customerId={id}
               customerName={customer.name}
               currentBalance={currentBalance}
-              canManageSms={store.role === "OWNER"}
+              canManageSms={canSendSms}
+              canExportLedger={canExportLedger}
+              canShareLedger={canShareLedger}
               hasPhone={Boolean(customer.phone)}
               entitlements={store.entitlements}
               ReminderButton={SendReminderButton}
@@ -149,7 +183,7 @@ export default async function CustomerLedgerPage({
                     key={row.id}
                     row={row}
                     customerName={customer.name}
-                    canDelete={store.role === "OWNER"}
+                    canDelete={canManageLedger}
                   />
                 ))
               ) : (
@@ -162,7 +196,7 @@ export default async function CustomerLedgerPage({
             <CustomerLedgerTable
               rows={rows}
               customerName={customer.name}
-              canDelete={store.role === "OWNER"}
+              canDelete={canManageLedger}
             />
 
             <CustomerLedgerPagination
@@ -175,7 +209,9 @@ export default async function CustomerLedgerPage({
         </div>
       </div>
 
-      <StickyMobileActionBar customerId={id} currentMode={mode} />
+      {canManageLedger ? (
+        <StickyMobileActionBar customerId={id} currentMode={mode} />
+      ) : null}
     </div>
   );
 }

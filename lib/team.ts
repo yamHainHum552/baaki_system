@@ -1,8 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizeStorePermissions, type StorePermission } from "@/lib/store-permissions";
 
 export type TeamMember = {
   user_id: string;
   role: "OWNER" | "STAFF";
+  permissions: StorePermission[];
   created_at: string;
   full_name: string | null;
   email: string | null;
@@ -13,7 +15,7 @@ export async function listStoreTeamMembers(storeId: string): Promise<TeamMember[
   const adminClient = createAdminClient();
   const { data: membershipRows, error } = await adminClient
     .from("store_memberships")
-    .select("user_id, role, created_at")
+    .select("*")
     .eq("store_id", storeId)
     .order("created_at", { ascending: true });
 
@@ -51,6 +53,7 @@ export async function listStoreTeamMembers(storeId: string): Promise<TeamMember[
   return (membershipRows ?? []).map((row) => ({
     user_id: row.user_id,
     role: row.role,
+    permissions: normalizeStorePermissions((row as { permissions?: unknown }).permissions),
     created_at: row.created_at,
     full_name: profileMap.get(row.user_id) ?? null,
     email: authMap.get(row.user_id)?.email ?? null,

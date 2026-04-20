@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 :root {
+  --font-heading: Georgia, "Times New Roman", Times, serif;
+  --font-body: "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   color-scheme: light;
 }
 
@@ -17,6 +19,7 @@ html {
 body {
   min-height: 100vh;
   color: #1f2937;
+  font-family: var(--font-body);
   background-image:
     linear-gradient(to bottom, transparent 35px, rgba(171, 46, 32, 0.12) 36px),
     linear-gradient(to right, rgba(57, 96, 79, 0.1) 48px, transparent 48px);
@@ -25,13 +28,22 @@ body {
     100% 100%;
 }
 
-input,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
 textarea,
 select {
   @apply w-full rounded-2xl border border-line bg-paper px-3.5 py-2.5 text-[15px] text-ink outline-none transition duration-200 sm:px-4 sm:py-3 sm:text-base;
 }
 
-input:focus,
+input:not([type="checkbox"]):not([type="radio"]):focus,
 textarea:focus,
 select:focus {
   @apply border-khata ring-2 ring-khata/20;
@@ -134,6 +146,22 @@ button {
   box-shadow:
     0 18px 44px rgba(31, 41, 55, 0.12),
     inset 0 0 0 1px rgba(31, 41, 55, 0.04);
+}
+
+.toast-progress {
+  animation-name: toast-progress-shrink;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes toast-progress-shrink {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
 }
 
 .stack-grid {

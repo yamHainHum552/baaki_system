@@ -9,6 +9,9 @@ type DeferredPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
+const INSTALL_PROMPT_STORAGE_KEY = "baaki_install_prompt_hidden_until";
+const INSTALL_PROMPT_SNOOZE_DAYS = 30;
+
 function isStandaloneMode() {
   if (typeof window === "undefined") {
     return false;
@@ -27,16 +30,22 @@ export function InstallAppCard({ className = "" }: { className?: string }) {
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(true);
   const [showIosHelp, setShowIosHelp] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
 
+    setIsDismissed(isInstallPromptHidden());
     setIsInstalled(isStandaloneMode());
 
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
+
+      if (isInstallPromptHidden()) {
+        return;
+      }
       setDeferredPrompt(event as DeferredPromptEvent);
       setIsInstalled(false);
     };
@@ -44,6 +53,8 @@ export function InstallAppCard({ className = "" }: { className?: string }) {
     const onInstalled = () => {
       setDeferredPrompt(null);
       setIsInstalled(true);
+      setIsDismissed(true);
+      clearInstallPromptSnooze();
     };
 
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
@@ -67,7 +78,10 @@ export function InstallAppCard({ className = "" }: { className?: string }) {
     return { isIos, isSafari };
   }, []);
 
-  const canShow = !isInstalled && (deferredPrompt || (platform.isIos && platform.isSafari));
+  const canShow =
+    !isInstalled &&
+    !isDismissed &&
+    (deferredPrompt || (platform.isIos && platform.isSafari));
 
   if (!canShow) {
     return null;
@@ -80,16 +94,21 @@ export function InstallAppCard({ className = "" }: { className?: string }) {
 
       if (result.outcome === "accepted") {
         setDeferredPrompt(null);
+        clearInstallPromptSnooze();
+        setIsDismissed(true);
         pushToast({
           tone: "success",
           title: "Baaki installed",
           description: "You can now open Baaki from your home screen like an app.",
         });
       } else {
+        snoozeInstallPrompt();
+        setDeferredPrompt(null);
+        setIsDismissed(true);
         pushToast({
           tone: "info",
           title: "Install skipped",
-          description: "You can still install Baaki later from your browser menu.",
+          description: "Baaki will stay quiet for now and remind you again later.",
         });
       }
 
@@ -97,6 +116,13 @@ export function InstallAppCard({ className = "" }: { className?: string }) {
     }
 
     setShowIosHelp((current) => !current);
+  }
+
+  function handleDismiss() {
+    snoozeInstallPrompt();
+    setDeferredPrompt(null);
+    setShowIosHelp(false);
+    setIsDismissed(true);
   }
 
   return (
@@ -120,9 +146,14 @@ export function InstallAppCard({ className = "" }: { className?: string }) {
           </p>
         </div>
 
-        <button type="button" onClick={handleInstall} className="button-primary shrink-0">
-          {deferredPrompt ? "Install app" : showIosHelp ? "Hide steps" : "Show install steps"}
-        </button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button type="button" onClick={handleInstall} className="button-primary">
+            {deferredPrompt ? "Install app" : showIosHelp ? "Hide steps" : "Show install steps"}
+          </button>
+          <button type="button" onClick={handleDismiss} className="button-secondary">
+            Not now
+          </button>
+        </div>
       </div>
 
       {platform.isIos && platform.isSafari ? (
@@ -142,4 +173,35 @@ export function InstallAppCard({ className = "" }: { className?: string }) {
       ) : null}
     </section>
   );
+}
+
+function isInstallPromptHidden() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const hiddenUntil = window.localStorage.getItem(INSTALL_PROMPT_STORAGE_KEY);
+  if (!hiddenUntil) {
+    return false;
+  }
+
+  const timestamp = Number(hiddenUntil);
+  return Number.isFinite(timestamp) && timestamp > Date.now();
+}
+
+function snoozeInstallPrompt() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const hiddenUntil = Date.now() + INSTALL_PROMPT_SNOOZE_DAYS * 24 * 60 * 60 * 1000;
+  window.localStorage.setItem(INSTALL_PROMPT_STORAGE_KEY, String(hiddenUntil));
+}
+
+function clearInstallPromptSnooze() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(INSTALL_PROMPT_STORAGE_KEY);
 }

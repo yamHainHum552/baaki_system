@@ -7,11 +7,11 @@ import { createPortal } from "react-dom";
 export function CustomerCardMenu({
   customerId,
   customerPhone,
-  isOwner,
+  canManageCustomers,
 }: {
   customerId: string;
   customerPhone: string | null;
-  isOwner: boolean;
+  canManageCustomers: boolean;
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -102,7 +102,7 @@ export function CustomerCardMenu({
             <svg className="h-4 w-4 text-khata" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12H9m12 0A9 9 0 113 12a9 9 0 0118 0z" />
             </svg>
-            {isOwner ? "Open and manage" : "Open ledger"}
+            {canManageCustomers ? "Open and manage" : "Open ledger"}
           </Link>
           {customerPhone ? (
             <>

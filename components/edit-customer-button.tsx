@@ -49,9 +49,10 @@ export function EditCustomerButton({
       </button>
 
       {open ? (
-        <div className="dialog-backdrop fixed inset-0 z-50 flex items-end justify-center px-4 py-4 sm:items-center sm:py-6">
-          <div className="dialog-panel w-full max-w-2xl overflow-hidden">
-            <div className="border-b border-line/80 bg-white/40 px-4 py-4 sm:px-6 sm:py-5">
+        <div className="dialog-backdrop fixed inset-0 z-50 flex items-end justify-center p-2 sm:p-4 sm:items-center sm:py-6">
+          <div className="dialog-panel max-h-[92vh] w-full max-w-[680px] overflow-hidden sm:max-h-[88vh] md:max-w-[720px]">
+            <div className="max-h-[92vh] overflow-y-auto">
+            <div className="border-b border-line/80 bg-white/40 px-4 py-4 sm:px-5 sm:py-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-khata">
@@ -87,11 +88,11 @@ export function EditCustomerButton({
               </div>
 
               <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
-                <div className="soft-panel px-4 py-3">
+                <div className="soft-panel px-3.5 py-3 sm:px-4">
                   <p className="text-[11px] uppercase tracking-[0.16em] text-ink/45">Phone</p>
                   <p className="mt-1 text-sm font-semibold text-ink">{phone || "Not added yet"}</p>
                 </div>
-                <div className="soft-panel px-4 py-3">
+                <div className="soft-panel px-3.5 py-3 sm:px-4">
                   <p className="text-[11px] uppercase tracking-[0.16em] text-ink/45">Address</p>
                   <p className="mt-1 line-clamp-1 text-sm font-semibold text-ink">
                     {address || "Not added yet"}
@@ -100,8 +101,8 @@ export function EditCustomerButton({
               </div>
             </div>
 
-            <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
-              <div className="px-4 py-4 sm:px-6 sm:py-5">
+            <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_260px]">
+              <div className="px-4 py-4 sm:px-5 sm:py-4">
                 <form
                   action={updateCustomerAction}
                   className="section-spacing"
@@ -155,8 +156,8 @@ export function EditCustomerButton({
                 </form>
               </div>
 
-              <aside className="border-t border-line/80 bg-white/30 px-4 py-4 sm:px-6 lg:border-l lg:border-t-0">
-                <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-4">
+              <aside className="border-t border-line/80 bg-white/30 px-4 py-4 sm:px-5 lg:border-l lg:border-t-0">
+                <div className="rounded-[22px] border border-red-200/70 bg-red-50/80 p-3.5 sm:p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">
                     Danger zone
                   </p>
@@ -190,6 +191,7 @@ export function EditCustomerButton({
                   </form>
                 </div>
               </aside>
+            </div>
             </div>
           </div>
         </div>

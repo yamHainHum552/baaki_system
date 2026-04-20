@@ -491,6 +491,8 @@ export async function getAdminStoreDetail(
     usage,
     customersCount,
     ledgerCount,
+    billingPayments,
+    billingEvents,
     auditLogs,
     adminAuditLogs,
     supportNotes,
@@ -523,6 +525,18 @@ export async function getAdminStoreDetail(
     countRows(adminClient, "customers", (query) => query.eq("store_id", storeId)),
     countRows(adminClient, "ledger_entries", (query) => query.eq("store_id", storeId)),
     adminClient
+      .from("billing_payments")
+      .select("id, provider, plan_type, billing_cycle, amount, currency, status, provider_reference_id, provider_payment_id, purchase_order_id, initiated_at, verified_at, created_at")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false })
+      .limit(12),
+    adminClient
+      .from("billing_provider_events")
+      .select("id, provider, event_type, status, provider_reference, processing_result, received_at, processed_at, payload")
+      .eq("store_id", storeId)
+      .order("received_at", { ascending: false })
+      .limit(12),
+    adminClient
       .from("audit_logs")
       .select("id, action, entity_type, created_at, details, actor_user_id")
       .eq("store_id", storeId)
@@ -546,6 +560,8 @@ export async function getAdminStoreDetail(
   if (memberships.error) throw new Error(memberships.error.message);
   if (request.error) throw new Error(request.error.message);
   if (usage.error) throw new Error(usage.error.message);
+  if (billingPayments.error) throw new Error(billingPayments.error.message);
+  if (billingEvents.error) throw new Error(billingEvents.error.message);
   if (auditLogs.error) throw new Error(auditLogs.error.message);
   if (adminAuditLogs.error) throw new Error(adminAuditLogs.error.message);
   if (supportNotes.error) throw new Error(supportNotes.error.message);
@@ -581,6 +597,8 @@ export async function getAdminStoreDetail(
     ledgerCount,
     lastActiveAt: lastLedger?.created_at ?? null,
     members: memberUsers,
+    billingPayments: billingPayments.data ?? [],
+    billingEvents: billingEvents.data ?? [],
     auditLogs: auditLogs.data ?? [],
     adminAuditLogs: adminAuditLogs.data ?? [],
     supportNotes: supportNotes.data ?? [],
@@ -767,7 +785,7 @@ export async function getPlatformAnalytics(adminClient: ReturnType<typeof create
 export async function listBillingEvents(adminClient: ReturnType<typeof createAdminClient>) {
   const { data, error } = await adminClient
     .from("billing_provider_events")
-    .select("id, provider, event_type, status, payload, received_at, processed_at, store_id, stores(name)")
+    .select("id, provider, event_type, status, provider_reference, processing_result, payload, received_at, processed_at, store_id, stores(name)")
     .order("received_at", { ascending: false })
     .limit(100);
 

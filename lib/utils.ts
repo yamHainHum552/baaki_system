@@ -1,6 +1,22 @@
 import type { BillingCycle, PlanStatus, PlanType } from "@/lib/entitlements";
+import { ADToBS } from "bikram-sambat-js";
 
 const englishLocale = "en-US";
+const nepaliDisplayTimeZone = "Asia/Kathmandu";
+const bsMonthNames = [
+  "Baishakh",
+  "Jestha",
+  "Ashadh",
+  "Shrawan",
+  "Bhadra",
+  "Ashwin",
+  "Kartik",
+  "Mangsir",
+  "Poush",
+  "Magh",
+  "Falgun",
+  "Chaitra",
+];
 
 export function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -15,18 +31,13 @@ export function formatCurrency(amount: number) {
 }
 
 export function formatDate(value: string) {
-  return new Intl.DateTimeFormat(englishLocale, {
-    day: "numeric",
-    month: "short",
-  }).format(new Date(value));
+  const date = formatBsDate(value);
+  return `${date.monthName} ${date.day}`;
 }
 
 export function formatLongDate(value: string) {
-  return new Intl.DateTimeFormat(englishLocale, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
+  const date = formatBsDate(value);
+  return `${date.monthName} ${date.day}, ${date.year} BS`;
 }
 
 export function formatDays(value: number | null | undefined) {
@@ -133,4 +144,60 @@ export function toEntryTimestamp(dateValue: FormDataEntryValue | null) {
   }
 
   return new Date(`${dateValue}T12:00:00`).toISOString();
+}
+
+function formatBsDate(value: string) {
+  try {
+    const adDateString = toKathmanduDateString(value);
+    const [year, month, day] = ADToBS(adDateString)
+      .split("-")
+      .map((part) => Number(part));
+
+    if (
+      !Number.isFinite(year) ||
+      !Number.isFinite(month) ||
+      !Number.isFinite(day) ||
+      month < 1 ||
+      month > bsMonthNames.length
+    ) {
+      throw new Error("Invalid BS date");
+    }
+
+    return {
+      year,
+      month,
+      day,
+      monthName: bsMonthNames[month - 1],
+    };
+  } catch {
+    const fallbackDate = new Date(value);
+    return {
+      year: fallbackDate.getUTCFullYear(),
+      month: fallbackDate.getUTCMonth() + 1,
+      day: fallbackDate.getUTCDate(),
+      monthName: new Intl.DateTimeFormat(englishLocale, {
+        month: "short",
+        timeZone: nepaliDisplayTimeZone,
+      }).format(fallbackDate),
+    };
+  }
+}
+
+function toKathmanduDateString(value: string) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: nepaliDisplayTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(new Date(value));
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    throw new Error("Unable to parse date");
+  }
+
+  return `${year}-${month}-${day}`;
 }

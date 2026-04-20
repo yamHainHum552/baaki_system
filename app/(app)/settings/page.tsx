@@ -4,15 +4,20 @@ import {
   removeStaffMemberAction,
   requestPremiumPlanAction,
   startTrialAction,
+  updateStaffPermissionsAction,
 } from "@/app/actions";
 import { PremiumBadge } from "@/components/premium-badge";
 import { PremiumRequestForm } from "@/components/premium-request-form";
 import { SectionCard } from "@/components/section-card";
+import { StoreBillingPanel } from "@/components/store-billing-panel";
 import { SubmitButton } from "@/components/submit-button";
 import { UsageProgress } from "@/components/usage-progress";
 import { requireStoreRole } from "@/lib/auth";
+import { getBillingCatalog, listStoreBillingHistory } from "@/lib/billing-service";
+import { STORE_PERMISSION_OPTIONS } from "@/lib/store-permissions";
 import { listStoreTeamMembers } from "@/lib/team";
 import {
+  formatCurrency,
   formatBillingCycleLabel,
   formatEntitlementPlanLabel,
   formatLongDate,
@@ -33,12 +38,16 @@ export default async function SettingsPage({
 }: {
   searchParams: Promise<{ message?: string; error?: string }>;
 }) {
-  const params = await searchParams;
-  const { store } = await requireStoreRole(
+  await searchParams;
+  const { supabase, store } = await requireStoreRole(
     "OWNER",
     "/dashboard?error=Only%20owners%20can%20open%20billing%20settings",
   );
-  const teamMembers = await listStoreTeamMembers(store.id);
+  const [teamMembers, billingCatalog, billingHistory] = await Promise.all([
+    listStoreTeamMembers(store.id),
+    Promise.resolve(getBillingCatalog()),
+    listStoreBillingHistory(supabase, store.id),
+  ]);
 
   return (
     <div className="section-spacing">
@@ -55,7 +64,7 @@ export default async function SettingsPage({
               {store.entitlements.planBadgeLabel ? <PremiumBadge /> : null}
             </div>
             <p className="mt-2 text-sm text-ink/70">
-              {formatPlanStatusLabel(store.entitlements.planStatus)} •{" "}
+              {formatPlanStatusLabel(store.entitlements.planStatus)} /{" "}
               {formatBillingCycleLabel(store.subscription.billing_cycle)}
             </p>
             {store.entitlements.isTrialing ? (
@@ -135,6 +144,11 @@ export default async function SettingsPage({
         </SectionCard>
       </section>
 
+      <StoreBillingPanel
+        plans={billingCatalog.plans}
+        providerAvailability={billingCatalog.providerAvailability}
+      />
+
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <SectionCard
           title="Team & staff"
@@ -165,7 +179,8 @@ export default async function SettingsPage({
                 <p className="text-sm font-semibold text-ink">Staff access policy</p>
                 <div className="mt-3 space-y-2 text-sm text-ink/65">
                   <p>Only owners can add or remove staff.</p>
-                  <p>Free plan supports a very small team. Premium increases staff capacity.</p>
+                  <p>Choose exactly which staff can manage customers, ledgers, reminders, share links, and exports.</p>
+                  <p>Free plan supports a very small team. Premium increases staff capacity and unlocks more shared tools.</p>
                   <p>Owners are not removable from this section.</p>
                 </div>
               </div>
@@ -199,20 +214,57 @@ export default async function SettingsPage({
                     </div>
 
                     {member.role === "STAFF" ? (
-                      <form action={removeStaffMemberAction}>
-                        <input type="hidden" name="staff_user_id" value={member.user_id} />
-                        <SubmitButton
-                          idle="Remove"
-                          pending="Removing..."
-                          className="button-secondary w-full sm:w-auto"
-                        />
-                      </form>
+                      <div className="flex flex-col gap-2 sm:items-end">
+                        <form action={removeStaffMemberAction}>
+                          <input type="hidden" name="staff_user_id" value={member.user_id} />
+                          <SubmitButton
+                            idle="Remove"
+                            pending="Removing..."
+                            className="button-secondary w-full sm:w-auto"
+                          />
+                        </form>
+                      </div>
                     ) : (
                       <div className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/45">
                         Primary owner
                       </div>
                     )}
                   </div>
+
+                  {member.role === "STAFF" ? (
+                    <form action={updateStaffPermissionsAction} className="mt-4 space-y-3">
+                      <input type="hidden" name="staff_user_id" value={member.user_id} />
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {STORE_PERMISSION_OPTIONS.map((permission) => (
+                          <label
+                            key={`${member.user_id}-${permission.key}`}
+                            className="soft-panel flex gap-3 px-3 py-3"
+                          >
+                            <input
+                              type="checkbox"
+                              name="permissions"
+                              value={permission.key}
+                              defaultChecked={member.permissions.includes(permission.key)}
+                              className="mt-1 h-4 w-4 shrink-0 rounded border-line text-khata focus:ring-khata"
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-semibold text-ink">
+                                {permission.label}
+                              </span>
+                              <span className="mt-1 block text-xs text-ink/60">
+                                {permission.description}
+                              </span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      <SubmitButton
+                        idle="Save permissions"
+                        pending="Saving..."
+                        className="button-secondary w-full sm:w-auto"
+                      />
+                    </form>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -249,8 +301,7 @@ export default async function SettingsPage({
                 <p>Higher export and share-link allowance</p>
               </div>
               <p className="mt-4 text-sm text-ink/55">
-                Payment integration is not wired yet, so this page keeps the store
-                ready for manual activation or a provider integration later.
+                Yearly billing is ready for provider verification and safe premium activation.
               </p>
             </div>
           </div>
@@ -264,28 +315,44 @@ export default async function SettingsPage({
       </section>
 
       <SectionCard
-        title="Subscription controls"
-        subtitle="Placeholders for billing provider actions and support workflows."
+        title="Billing history"
+        subtitle="Latest payment attempts and verified premium activations."
       >
-        <div className="grid gap-3 lg:grid-cols-3">
-          <div className="soft-panel p-4">
-            <p className="text-sm font-semibold text-ink">Manage subscription</p>
-            <p className="mt-2 text-sm text-ink/65">
-              Stripe, Khalti, or eSewa management hooks can plug in here later.
+        <div className="space-y-3">
+          {billingHistory.length ? (
+            billingHistory.map((row: any) => (
+              <div key={row.id} className="soft-panel p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-ink">
+                        {row.plan_type?.replaceAll("_", " ") ?? "premium"}
+                      </p>
+                      <span className="rounded-full bg-paper px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/65">
+                        {row.provider}
+                      </span>
+                      <span className="rounded-full bg-paper px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/65">
+                        {row.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-ink/65">
+                      {formatCurrency(Number(row.amount ?? 0))} / {row.billing_cycle}
+                    </p>
+                    <p className="mt-1 text-xs text-ink/50">
+                      Initiated {formatLongDate(row.initiated_at ?? row.created_at)}
+                    </p>
+                  </div>
+                  <div className="text-sm text-ink/60">
+                    {row.provider_reference_id ?? row.provider_payment_id ?? "Reference pending"}
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-ink/60">
+              No billing activity yet. Upgrade attempts through Khalti or eSewa will appear here.
             </p>
-          </div>
-          <div className="soft-panel p-4">
-            <p className="text-sm font-semibold text-ink">Cancel subscription</p>
-            <p className="mt-2 text-sm text-ink/65">
-              Cancellation flow will update plan status and grace period when billing is connected.
-            </p>
-          </div>
-          <div className="soft-panel p-4">
-            <p className="text-sm font-semibold text-ink">Billing support</p>
-            <p className="mt-2 text-sm text-ink/65">
-              Current upgrade request status: {store.upgrade_request_status ?? "None"}.
-            </p>
-          </div>
+          )}
         </div>
       </SectionCard>
     </div>

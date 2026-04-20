@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BaakiLoader } from "@/components/baaki-loader";
 import { useToast } from "@/components/toast-provider";
 import { cn } from "@/lib/utils";
 
@@ -41,19 +40,11 @@ export function QuickEntryForm({
   const [isOnline, setIsOnline] = useState(true);
   const [listeningDescription, setListeningDescription] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isModePending, setIsModePending] = useState(false);
-  const [isRouting, startTransition] = useTransition();
   const { pushToast } = useToast();
 
   useEffect(() => {
     setMode(initialMode);
   }, [initialMode]);
-
-  useEffect(() => {
-    if (initialMode === mode) {
-      setIsModePending(false);
-    }
-  }, [initialMode, mode]);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -87,12 +78,9 @@ export function QuickEntryForm({
     }
 
     setMode(nextMode);
-    setIsModePending(true);
     const params = new URLSearchParams(searchParams.toString());
     params.set("mode", nextMode);
-    startTransition(() => {
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-    });
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
   function appendKey(value: string) {
@@ -231,17 +219,7 @@ export function QuickEntryForm({
   }
 
   return (
-    <div className="relative section-spacing">
-      {isModePending || isRouting ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-[28px] bg-paper/88 backdrop-blur-sm">
-          <BaakiLoader
-            compact
-            label={mode === "baaki" ? "Switching to Baaki" : "Switching to Payment"}
-            detail="Refreshing the quick entry form..."
-          />
-        </div>
-      ) : null}
-
+    <div className="section-spacing">
       <div className="grid grid-cols-2 gap-2 sm:gap-4">
         <button
           type="button"

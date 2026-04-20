@@ -6,7 +6,7 @@ import { PremiumBadge } from "@/components/premium-badge";
 import { SubmitButton } from "@/components/submit-button";
 import { RiskBadge } from "@/components/risk-badge";
 import { UsageProgress } from "@/components/usage-progress";
-import { getDashboardSummary } from "@/lib/baaki";
+import { getDashboardSummary, getOwnedStoresOverview } from "@/lib/baaki";
 import { requireStoreContext } from "@/lib/auth";
 import { canUseAdvancedReports, canUseForecast } from "@/lib/entitlements";
 import {
@@ -31,13 +31,17 @@ export default async function DashboardPage({
   searchParams: Promise<{ message?: string; error?: string }>;
 }) {
   const params = await searchParams;
-  const { supabase, store } = await requireStoreContext();
+  const { supabase, store, userId } = await requireStoreContext();
   const summary = await getDashboardSummary(
     supabase,
     store.id,
     store.risk_threshold,
     store.entitlements,
   );
+  const multiStoreOverview =
+    store.role === "OWNER" && store.memberships.filter((membership) => membership.role === "OWNER").length > 1
+      ? await getOwnedStoresOverview(userId, store.id)
+      : null;
 
   return (
     <div className="section-spacing">
@@ -63,6 +67,112 @@ export default async function DashboardPage({
           </p>
         </div>
       </section>
+
+      {multiStoreOverview ? (
+        <CollapsibleSection
+          title="Multi-store overview"
+          subtitle={
+            store.entitlements.isPremium
+              ? "Cross-store totals for owner accounts."
+              : "Cross-store analytics stay on Premium."
+          }
+          defaultOpen={false}
+        >
+          {store.entitlements.isPremium ? (
+            <div className="section-spacing">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="soft-panel px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-ink/45">
+                    Total stores
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-ink">
+                    {formatNumber(multiStoreOverview.stores.length)}
+                  </p>
+                </div>
+                <div className="soft-panel px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-ink/45">
+                    Cross-store baaki
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-khata">
+                    {formatCurrency(multiStoreOverview.totalBaaki)}
+                  </p>
+                </div>
+                <div className="soft-panel px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-ink/45">
+                    High dues
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-moss">
+                    {formatNumber(multiStoreOverview.highDueCount)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                {multiStoreOverview.stores.map((ownedStore) => (
+                  <div key={ownedStore.storeId} className="soft-panel px-4 py-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-base font-semibold text-ink">
+                            {ownedStore.storeName}
+                          </p>
+                          {ownedStore.isCurrentStore ? (
+                            <span className="rounded-full bg-paper px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/60">
+                              Current
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-sm text-ink/65">
+                          {formatEntitlementPlanLabel(ownedStore.planType)}
+                          {ownedStore.lastEntryAt
+                            ? ` | Last activity ${formatDate(ownedStore.lastEntryAt)}`
+                            : " | No entries yet"}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-sm sm:min-w-[320px]">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">
+                            Customers
+                          </p>
+                          <p className="mt-1 font-semibold text-ink">
+                            {formatNumber(ownedStore.totalCustomers)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">
+                            Baaki
+                          </p>
+                          <p className="mt-1 font-semibold text-khata">
+                            {formatCurrency(ownedStore.totalBaaki)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">
+                            High dues
+                          </p>
+                          <p className="mt-1 font-semibold text-moss">
+                            {formatNumber(ownedStore.highDueCount)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="soft-panel p-4">
+              <p className="text-sm font-semibold text-ink">Premium-only owner analytics</p>
+              <p className="mt-2 text-sm text-ink/65">
+                Upgrade this store to Premium to compare baaki, customers, and activity across your other stores in one dashboard.
+              </p>
+              <Link href="/settings" className="mt-3 inline-flex text-sm font-semibold text-khata">
+                Compare plans
+              </Link>
+            </div>
+          )}
+        </CollapsibleSection>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr] xl:gap-6">
         <div className="surface-panel p-4 sm:p-6 lg:p-7">

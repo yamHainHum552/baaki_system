@@ -35,7 +35,7 @@ export default async function SuperAdminStoreDetailPage({
             </Link>
             <h1 className="mt-2 font-serif text-3xl text-ink">{detail.store.name}</h1>
             <p className="mt-2 text-sm text-ink/65">
-              {detail.store.phone ?? "No store phone"} • Created {formatLongDate(detail.store.created_at)}
+              {detail.store.phone ?? "No store phone"} / Created {formatLongDate(detail.store.created_at)}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <AdminStatusBadge label={detail.store.admin_status} tone={detail.store.admin_status === "active" ? "moss" : "red"} />
@@ -194,7 +194,7 @@ export default async function SuperAdminStoreDetailPage({
                   Status: {detail.request.status}
                 </p>
                 <p className="mt-1 text-sm text-ink/70">
-                  {detail.request.contact_phone ?? "No contact phone"} • Requested {formatLongDate(detail.request.created_at)}
+                  {detail.request.contact_phone ?? "No contact phone"} / Requested {formatLongDate(detail.request.created_at)}
                 </p>
                 {detail.request.notes ? (
                   <p className="mt-2 text-sm text-ink/65">{detail.request.notes}</p>
@@ -245,6 +245,84 @@ export default async function SuperAdminStoreDetailPage({
               ))
             ) : (
               <p className="text-sm text-ink/60">No support notes yet.</p>
+            )}
+          </div>
+        </CollapsibleSection>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <CollapsibleSection title="Billing history" subtitle="Verified payments, pending attempts, and provider references." defaultOpen>
+          <div className="space-y-2.5">
+            {detail.billingPayments.length ? (
+              detail.billingPayments.map((payment: any) => (
+                <div key={payment.id} className="soft-panel px-3 py-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-ink">
+                          {formatNumber(Number(payment.amount ?? 0))} {payment.currency}
+                        </p>
+                        <AdminStatusBadge label={payment.provider} tone="khata" />
+                        <AdminStatusBadge
+                          label={payment.status}
+                          tone={
+                            payment.status === "verified"
+                              ? "moss"
+                              : payment.status === "pending" || payment.status === "initiated"
+                                ? "amber"
+                                : "red"
+                          }
+                        />
+                      </div>
+                      <p className="mt-1 text-xs text-ink/60">
+                        {payment.plan_type?.replaceAll("_", " ")} / {payment.billing_cycle}
+                      </p>
+                      <p className="mt-1 text-xs text-ink/60">
+                        Reference {payment.provider_reference_id ?? payment.provider_payment_id ?? payment.purchase_order_id}
+                      </p>
+                      <p className="mt-1 text-xs text-ink/50">
+                        Initiated {formatLongDate(payment.initiated_at ?? payment.created_at)}
+                        {payment.verified_at ? ` / Verified ${formatLongDate(payment.verified_at)}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-ink/60">No billing history yet.</p>
+            )}
+          </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Provider events" subtitle="Recent billing callbacks and verification events." defaultOpen={false}>
+          <div className="space-y-2.5">
+            {detail.billingEvents.length ? (
+              detail.billingEvents.map((event: any) => (
+                <div key={event.id} className="soft-panel px-3 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <AdminStatusBadge label={event.provider} tone="khata" />
+                    <AdminStatusBadge
+                      label={event.status}
+                      tone={
+                        event.status === "verified" || event.status === "active"
+                          ? "moss"
+                          : event.status === "pending" || event.status === "received" || event.status === "initiated"
+                            ? "amber"
+                            : "red"
+                      }
+                    />
+                    <p className="text-sm font-semibold text-ink">{event.event_type.replaceAll("_", " ")}</p>
+                  </div>
+                  <p className="mt-1 text-xs text-ink/60">
+                    {event.provider_reference ?? "No provider reference"} / {formatLongDate(event.received_at)}
+                  </p>
+                  {event.processing_result ? (
+                    <p className="mt-1 text-xs text-ink/55">{event.processing_result}</p>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-ink/60">No provider events yet.</p>
             )}
           </div>
         </CollapsibleSection>

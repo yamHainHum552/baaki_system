@@ -1,8 +1,11 @@
 import dynamic from "next/dynamic";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { signInAction } from "@/app/actions";
+import { AuthFormShell } from "@/components/auth-form-shell";
 import { BrandLogo } from "@/components/brand-logo";
 import { SubmitButton } from "@/components/submit-button";
+import { getWorkspaceStateIfSignedIn } from "@/lib/auth";
 
 const PasskeySignInButton = dynamic(
   () => import("@/components/passkey-sign-in-button").then((mod) => mod.PasskeySignInButton),
@@ -15,6 +18,11 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string; message?: string }>;
 }) {
   await searchParams;
+  const session = await getWorkspaceStateIfSignedIn();
+
+  if (session) {
+    redirect(session.context ? "/dashboard" : "/setup");
+  }
 
   return (
     <main className="page-shell items-center justify-center">
@@ -25,7 +33,7 @@ export default async function LoginPage({
           Record baaki and payments just like the red notebook on your counter.
         </p>
 
-        <form action={signInAction} className="mt-6 space-y-4">
+        <AuthFormShell action={signInAction} className="mt-6 space-y-4">
           <div>
             <label className="mb-2 block text-sm font-medium text-ink">Email</label>
             <input
@@ -51,7 +59,7 @@ export default async function LoginPage({
             pending="Opening..."
             className="button-primary w-full text-base"
           />
-        </form>
+        </AuthFormShell>
 
         <div className="mt-5">
           <div className="relative py-3">

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { incrementStoreUsage, requireFeatureAccess } from "@/lib/entitlements";
 import { logSubscriptionEvent } from "@/lib/billing";
-import { getStoreContextForApiWithRole } from "@/lib/auth";
+import { getStoreContextForApiWithPermission } from "@/lib/auth";
 import { toPremiumErrorPayload } from "@/lib/premium-errors";
 import { createShareToken } from "@/lib/shares";
 
@@ -9,9 +9,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  let context: Awaited<ReturnType<typeof getStoreContextForApiWithRole>> | null = null;
+  let context: Awaited<ReturnType<typeof getStoreContextForApiWithPermission>> | null = null;
   try {
-    context = await getStoreContextForApiWithRole("STAFF");
+    context = await getStoreContextForApiWithPermission("share_customer_ledger");
     if ("error" in context) {
       return NextResponse.json({ error: context.error }, { status: context.status });
     }

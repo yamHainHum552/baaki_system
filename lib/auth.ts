@@ -6,12 +6,18 @@ import {
   type StoreSubscription,
   type StoreUsage,
 } from "@/lib/entitlements";
+import {
+  hasStorePermission,
+  normalizeStorePermissions,
+  type StorePermission,
+} from "@/lib/store-permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export type StoreMembership = {
   store_id: string;
   store_name: string;
   role: "OWNER" | "STAFF";
+  permissions: StorePermission[];
 };
 
 export type StoreContext = {
@@ -28,6 +34,7 @@ export type StoreContext = {
     customer_limit: number;
     upgrade_request_status: string | null;
     role: "OWNER" | "STAFF";
+    permissions: StorePermission[];
     memberships: StoreMembership[];
     subscription: StoreSubscription;
     usage: StoreUsage;
@@ -75,6 +82,22 @@ export async function requireStoreContext(): Promise<StoreContext> {
 
 export async function getWorkspaceStateForUser() {
   const { supabase, user } = await requireUser();
+  const context = await getStoreContextFromUser(supabase, user.id);
+
+  return {
+    supabase,
+    user,
+    context,
+  };
+}
+
+export async function getWorkspaceStateIfSignedIn() {
+  const { supabase, user } = await getUser();
+
+  if (!user) {
+    return null;
+  }
+
   const context = await getStoreContextFromUser(supabase, user.id);
 
   return {
@@ -135,6 +158,33 @@ export async function getStoreContextForApiWithRole(role: "OWNER" | "STAFF") {
   return context;
 }
 
+export async function requireStorePermission(
+  permission: StorePermission,
+  redirectTo = "/dashboard?error=Access%20denied",
+) {
+  const context = await requireStoreContext();
+
+  if (!hasStorePermission(context.store.role, context.store.permissions, permission)) {
+    redirect(redirectTo);
+  }
+
+  return context;
+}
+
+export async function getStoreContextForApiWithPermission(permission: StorePermission) {
+  const context = await getStoreContextForApi();
+
+  if ("error" in context) {
+    return context;
+  }
+
+  if (!hasStorePermission(context.store.role, context.store.permissions, permission)) {
+    return { error: "Access denied.", status: 403 as const };
+  }
+
+  return context;
+}
+
 async function getStoreContextFromUser(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string
@@ -148,7 +198,7 @@ async function getStoreContextFromUser(
   const [{ data: memberships, error: membershipsError }] = await Promise.all([
     supabase
       .from("store_memberships")
-      .select("role, store_id, stores(name)")
+      .select("*, stores(name)")
       .eq("user_id", userId),
   ]);
 
@@ -161,7 +211,8 @@ async function getStoreContextFromUser(
     .map((membership: any) => ({
       store_id: membership.store_id,
       store_name: membership.stores.name,
-      role: membership.role
+      role: membership.role,
+      permissions: normalizeStorePermissions(membership.permissions),
     }));
 
   const fallbackStoreId = availableStores[0]?.store_id ?? null;
@@ -174,7 +225,7 @@ async function getStoreContextFromUser(
   const [{ data: subscription }, { data: upgradeRequest }] = await Promise.all([
     supabase
       .from("subscriptions")
-      .select("store_id, plan, customer_limit, plan_type, plan_status, premium_enabled, trial_started_at, trial_ends_at, subscription_starts_at, subscription_ends_at, grace_ends_at, billing_cycle, max_customers, max_staff, max_sms_per_month, max_exports_per_month, max_share_links_per_month, feature_flags, billing_provider, provider_subscription_id")
+      .select("store_id, plan, customer_limit, plan_type, plan_status, premium_enabled, trial_started_at, trial_ends_at, subscription_starts_at, subscription_ends_at, grace_ends_at, billing_cycle, max_customers, max_staff, max_sms_per_month, max_exports_per_month, max_share_links_per_month, feature_flags, billing_provider, provider_subscription_id, provider_payment_id, provider_reference_id, plan_code, amount, currency, payment_initiated_at, payment_verified_at, raw_metadata, created_by_user_id, verified_by_system, last_provider_event_at")
       .eq("store_id", activeStoreId)
       .maybeSingle(),
     supabase
@@ -218,6 +269,17 @@ async function getStoreContextFromUser(
     feature_flags: (subscription?.feature_flags ?? {}) as Record<string, boolean>,
     billing_provider: subscription?.billing_provider ?? null,
     provider_subscription_id: subscription?.provider_subscription_id ?? null,
+    provider_payment_id: subscription?.provider_payment_id ?? null,
+    provider_reference_id: subscription?.provider_reference_id ?? null,
+    plan_code: subscription?.plan_code ?? null,
+    amount: subscription?.amount == null ? null : Number(subscription.amount),
+    currency: subscription?.currency ?? "NPR",
+    payment_initiated_at: subscription?.payment_initiated_at ?? null,
+    payment_verified_at: subscription?.payment_verified_at ?? null,
+    raw_metadata: (subscription?.raw_metadata ?? {}) as Record<string, unknown>,
+    created_by_user_id: subscription?.created_by_user_id ?? null,
+    verified_by_system: Boolean(subscription?.verified_by_system),
+    last_provider_event_at: subscription?.last_provider_event_at ?? null,
   };
   const entitlements = resolveStoreEntitlements(normalizedSubscription, usage);
 
@@ -232,6 +294,7 @@ async function getStoreContextFromUser(
     customer_limit: normalizedSubscription.legacy_customer_limit,
     upgrade_request_status: upgradeRequest?.status ?? null,
     role: currentMembership.role,
+    permissions: currentMembership.permissions,
     memberships: availableStores,
     subscription: normalizedSubscription,
     usage,

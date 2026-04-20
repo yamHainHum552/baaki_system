@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import { incrementStoreUsage, requireFeatureAccess } from "@/lib/entitlements";
 import { logSubscriptionEvent } from "@/lib/billing";
 import { getCustomerLedger } from "@/lib/baaki";
-import { getStoreContextForApiWithRole } from "@/lib/auth";
+import { getStoreContextForApiWithPermission } from "@/lib/auth";
 import { toPremiumErrorPayload } from "@/lib/premium-errors";
 import { buildReminderMessage, sendSMS } from "@/lib/sms";
 
 export async function POST(request: Request) {
-  let context: Awaited<ReturnType<typeof getStoreContextForApiWithRole>> | null = null;
+  let context: Awaited<ReturnType<typeof getStoreContextForApiWithPermission>> | null = null;
   try {
-    context = await getStoreContextForApiWithRole("OWNER");
+    context = await getStoreContextForApiWithPermission("send_sms_reminders");
     if ("error" in context) {
       return NextResponse.json({ error: context.error }, { status: context.status });
     }

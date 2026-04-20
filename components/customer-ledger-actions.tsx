@@ -13,6 +13,7 @@ type ShareComponent = React.ComponentType<{
   customerName: string;
   amount: number;
   access: FeatureAccess;
+  enabled?: boolean;
   embedded?: boolean;
 }>;
 
@@ -22,6 +23,8 @@ export function CustomerLedgerActions({
   customerName,
   currentBalance,
   canManageSms,
+  canExportLedger,
+  canShareLedger,
   hasPhone,
   entitlements,
   ReminderButton,
@@ -36,6 +39,8 @@ export function CustomerLedgerActions({
   customerName: string;
   currentBalance: number;
   canManageSms: boolean;
+  canExportLedger: boolean;
+  canShareLedger: boolean;
   hasPhone: boolean;
   entitlements: StoreEntitlements;
   ReminderButton: ReminderComponent;
@@ -73,7 +78,7 @@ export function CustomerLedgerActions({
 
       <div className="rounded-[24px] border border-line/75 bg-warm/55 p-2.5 sm:p-3">
         <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
-        {canExportCsv(entitlements) ? (
+        {canExportCsv(entitlements) && canExportLedger ? (
           <a
             href={`/api/export/customer-ledger?customerId=${customerId}&format=csv`}
             className="button-secondary text-center"
@@ -82,11 +87,11 @@ export function CustomerLedgerActions({
           </a>
         ) : (
           <div className="soft-panel flex items-center justify-center gap-2 px-4 py-3 text-sm text-ink/60">
-            <PremiumBadge />
-            CSV limit reached
+            {canExportLedger ? <PremiumBadge /> : null}
+            {canExportLedger ? "CSV limit reached" : "Export not enabled"}
           </div>
         )}
-        {canExportPdf(entitlements) ? (
+        {canExportPdf(entitlements) && canExportLedger ? (
           <a
             href={`/api/export/customer-ledger?customerId=${customerId}&format=pdf`}
             target="_blank"
@@ -97,8 +102,8 @@ export function CustomerLedgerActions({
           </a>
         ) : (
           <div className="soft-panel flex items-center justify-center gap-2 px-4 py-3 text-sm text-ink/60">
-            <PremiumBadge />
-            PDF export on Premium
+            {canExportLedger ? <PremiumBadge /> : null}
+            {canExportLedger ? "PDF export on Premium" : "Export not enabled"}
           </div>
         )}
         <div className="xl:col-span-1">
@@ -117,6 +122,7 @@ export function CustomerLedgerActions({
           customerName={customerName}
           amount={currentBalance}
           access={entitlements.featureAccess.customer_share}
+          enabled={canShareLedger}
           embedded
         />
       </div>

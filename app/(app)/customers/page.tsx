@@ -4,6 +4,7 @@ import { CustomersToolbar } from "@/components/customers-toolbar";
 import { CustomersResultsSummary } from "@/components/customers-results-summary";
 import { listCustomersWithBalance } from "@/lib/baaki";
 import { requireStoreContext } from "@/lib/auth";
+import { hasStorePermission } from "@/lib/store-permissions";
 import { formatCurrency } from "@/lib/utils";
 
 type CustomerListItem = {
@@ -29,6 +30,11 @@ export default async function CustomersPage({
     store.id,
     undefined,
     store.risk_threshold,
+  );
+  const canManageCustomers = hasStorePermission(
+    store.role,
+    store.permissions,
+    "manage_customers",
   );
   const filteredCustomers = filterCustomers(customers, query);
   const totalDue = filteredCustomers.reduce((sum, customer) => sum + customer.balance, 0);
@@ -59,7 +65,7 @@ export default async function CustomersPage({
           <CustomersResultsSummary count={filteredCustomers.length} totalDue={totalDue} />
         </div>
 
-        <CustomersToolbar initialQuery={query} isOwner={store.role === "OWNER"} />
+        <CustomersToolbar initialQuery={query} canManageCustomers={canManageCustomers} />
 
         <CustomersResultsSummary count={filteredCustomers.length} totalDue={totalDue} mobile />
       </section>
@@ -71,7 +77,7 @@ export default async function CustomersPage({
               <CustomerListCard
                 key={customer.customer_id}
                 customer={customer}
-                isOwner={store.role === "OWNER"}
+                canManageCustomers={canManageCustomers}
               />
             ))
           ) : (

@@ -102,10 +102,21 @@ create table if not exists public.store_memberships (
   user_id uuid not null references auth.users(id) on delete cascade,
   store_id uuid not null references public.stores(id) on delete cascade,
   role public.store_role not null default 'STAFF',
+  permissions jsonb not null default '[]'::jsonb,
   is_default boolean not null default false,
   created_at timestamptz not null default now(),
   unique (user_id, store_id)
 );
+
+alter table public.store_memberships add column if not exists permissions jsonb not null default '[]'::jsonb;
+
+update public.store_memberships
+set permissions = '["manage_customers","manage_ledger","send_sms_reminders","share_customer_ledger","export_customer_ledger"]'::jsonb
+where role = 'STAFF'
+  and (
+    permissions is null
+    or permissions = '[]'::jsonb
+  );
 
 create table if not exists public.subscriptions (
   id uuid primary key default gen_random_uuid(),
@@ -130,6 +141,17 @@ create table if not exists public.subscriptions (
   feature_flags jsonb not null default '{}'::jsonb,
   billing_provider text,
   provider_subscription_id text,
+  provider_payment_id text,
+  provider_reference_id text,
+  plan_code text,
+  amount numeric(12, 2),
+  currency text not null default 'NPR',
+  payment_initiated_at timestamptz,
+  payment_verified_at timestamptz,
+  raw_metadata jsonb not null default '{}'::jsonb,
+  created_by_user_id uuid references auth.users(id) on delete set null,
+  verified_by_system boolean not null default false,
+  last_provider_event_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -150,6 +172,17 @@ alter table public.subscriptions add column if not exists max_share_links_per_mo
 alter table public.subscriptions add column if not exists feature_flags jsonb not null default '{}'::jsonb;
 alter table public.subscriptions add column if not exists billing_provider text;
 alter table public.subscriptions add column if not exists provider_subscription_id text;
+alter table public.subscriptions add column if not exists provider_payment_id text;
+alter table public.subscriptions add column if not exists provider_reference_id text;
+alter table public.subscriptions add column if not exists plan_code text;
+alter table public.subscriptions add column if not exists amount numeric(12, 2);
+alter table public.subscriptions add column if not exists currency text not null default 'NPR';
+alter table public.subscriptions add column if not exists payment_initiated_at timestamptz;
+alter table public.subscriptions add column if not exists payment_verified_at timestamptz;
+alter table public.subscriptions add column if not exists raw_metadata jsonb not null default '{}'::jsonb;
+alter table public.subscriptions add column if not exists created_by_user_id uuid references auth.users(id) on delete set null;
+alter table public.subscriptions add column if not exists verified_by_system boolean not null default false;
+alter table public.subscriptions add column if not exists last_provider_event_at timestamptz;
 
 update public.subscriptions
 set
@@ -239,13 +272,49 @@ create table if not exists public.store_usage_counters (
 create table if not exists public.billing_provider_events (
   id uuid primary key default gen_random_uuid(),
   store_id uuid references public.stores(id) on delete cascade,
+  subscription_id uuid references public.subscriptions(id) on delete cascade,
+  billing_payment_id uuid,
   provider text not null,
   event_type text not null,
   status text not null default 'received',
+  provider_reference text,
   payload jsonb not null default '{}'::jsonb,
   received_at timestamptz not null default now(),
-  processed_at timestamptz
+  processed_at timestamptz,
+  processing_result text
 );
+
+create table if not exists public.billing_payments (
+  id uuid primary key default gen_random_uuid(),
+  store_id uuid not null references public.stores(id) on delete cascade,
+  subscription_id uuid references public.subscriptions(id) on delete set null,
+  initiated_by_user_id uuid references auth.users(id) on delete set null,
+  provider text not null,
+  plan_type public.plan_type not null,
+  billing_cycle public.billing_cycle not null,
+  amount_minor integer not null,
+  amount numeric(12, 2) not null,
+  currency text not null default 'NPR',
+  status text not null default 'pending',
+  purchase_order_id text not null unique,
+  provider_payment_id text,
+  provider_reference_id text,
+  provider_status text,
+  raw_init_payload jsonb not null default '{}'::jsonb,
+  raw_callback_payload jsonb not null default '{}'::jsonb,
+  raw_verification_payload jsonb not null default '{}'::jsonb,
+  raw_metadata jsonb not null default '{}'::jsonb,
+  initiated_at timestamptz not null default now(),
+  verified_at timestamptz,
+  completed_at timestamptz,
+  last_provider_event_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public.billing_provider_events add column if not exists subscription_id uuid references public.subscriptions(id) on delete cascade;
+alter table public.billing_provider_events add column if not exists billing_payment_id uuid references public.billing_payments(id) on delete cascade;
+alter table public.billing_provider_events add column if not exists provider_reference text;
+alter table public.billing_provider_events add column if not exists processing_result text;
 
 create table if not exists public.user_passkeys (
   id uuid primary key default gen_random_uuid(),
@@ -309,6 +378,11 @@ create index if not exists subscription_upgrade_requests_store_idx on public.sub
 create index if not exists subscriptions_store_plan_idx on public.subscriptions(store_id, plan_type, plan_status);
 create index if not exists store_usage_counters_store_month_idx on public.store_usage_counters(store_id, usage_month desc);
 create index if not exists billing_provider_events_store_idx on public.billing_provider_events(store_id, received_at desc);
+create index if not exists billing_provider_events_payment_idx on public.billing_provider_events(billing_payment_id, received_at desc);
+create index if not exists billing_payments_store_created_idx on public.billing_payments(store_id, created_at desc);
+create index if not exists billing_payments_purchase_order_idx on public.billing_payments(provider, purchase_order_id);
+create index if not exists billing_payments_provider_reference_idx on public.billing_payments(provider, provider_reference_id);
+create index if not exists billing_payments_status_idx on public.billing_payments(status, created_at desc);
 create index if not exists user_passkeys_user_idx on public.user_passkeys(user_id, created_at desc);
 create index if not exists passkey_challenges_flow_idx on public.passkey_challenges(flow, expires_at desc);
 
@@ -400,6 +474,15 @@ declare
 begin
   if auth.uid() is null then
     raise exception 'You must be signed in to create a store.';
+  end if;
+
+  if exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.store_id is not null
+  ) then
+    raise exception 'This account has already been linked to a store workspace and cannot create a new store.';
   end if;
 
   if p_name is null or btrim(p_name) = '' then
@@ -1049,6 +1132,7 @@ alter table public.subscriptions enable row level security;
 alter table public.subscription_upgrade_requests enable row level security;
 alter table public.store_usage_counters enable row level security;
 alter table public.billing_provider_events enable row level security;
+alter table public.billing_payments enable row level security;
 alter table public.user_passkeys enable row level security;
 alter table public.passkey_challenges enable row level security;
 alter table public.customer_share_tokens enable row level security;
@@ -1168,7 +1252,14 @@ create policy "Billing events belong to current store"
 on public.billing_provider_events
 for select
 to authenticated
-using (store_id = public.current_store_id());
+using (store_id = public.current_store_id() and public.has_store_role('OWNER'));
+
+drop policy if exists "Billing payments belong to current store owners" on public.billing_payments;
+create policy "Billing payments belong to current store owners"
+on public.billing_payments
+for select
+to authenticated
+using (store_id = public.current_store_id() and public.has_store_role('OWNER'));
 
 drop policy if exists "Users can view own passkeys" on public.user_passkeys;
 create policy "Users can view own passkeys"

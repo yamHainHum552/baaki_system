@@ -10,12 +10,14 @@ export function ShareActions({
   customerName,
   amount,
   access,
+  enabled = true,
   embedded = false,
 }: {
   customerId: string;
   customerName: string;
   amount: number;
   access: FeatureAccess;
+  enabled?: boolean;
   embedded?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -117,27 +119,41 @@ export function ShareActions({
         <button
           type="button"
           onClick={handleCopy}
+          disabled={!enabled}
           className="button-secondary"
         >
           {copied ? "Copied" : "Copy text"}
         </button>
-        <a
-          href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}
-          target="_blank"
-          rel="noreferrer"
-          className="button-secondary text-center"
-        >
-          WhatsApp
-        </a>
+        {enabled ? (
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="button-secondary text-center"
+          >
+            WhatsApp
+          </a>
+        ) : (
+          <div className="button-secondary text-center opacity-70">
+            WhatsApp
+          </div>
+        )}
         <button
           type="button"
           onClick={handleCreateLink}
-          disabled={!access.allowed || creatingLink}
+          disabled={!enabled || !access.allowed || creatingLink}
           className="button-secondary"
         >
           {creatingLink ? "Creating..." : "Create link"}
         </button>
       </div>
+      {!enabled ? (
+        <div className="rounded-2xl bg-warm px-3 py-2.5">
+          <p className="text-xs text-ink/65">
+            Your owner has not enabled share-link access for this staff account.
+          </p>
+        </div>
+      ) : null}
       {!access.allowed ? (
         <div className="rounded-2xl bg-warm px-3 py-2.5">
           <p className="text-xs text-ink/65">

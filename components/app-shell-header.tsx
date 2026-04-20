@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import { signOutAction } from "@/app/actions";
 import { BrandLogo } from "@/components/brand-logo";
-import { SubmitButton } from "@/components/submit-button";
 import { StoreSwitcher } from "@/components/store-switcher";
+import { SubmitButton } from "@/components/submit-button";
 import { cn, formatEntitlementPlanLabel } from "@/lib/utils";
 
 export function AppShellHeader({
@@ -61,7 +61,7 @@ export function AppShellHeader({
                 {store.name}
               </p>
               <p className="mt-0.5 text-xs text-ink/55">
-                {roleLabel} · {planLabel}
+                {roleLabel} {"\u00B7"} {planLabel}
               </p>
             </div>
           </div>
@@ -139,7 +139,7 @@ export function AppShellHeader({
                   {store.name}
                 </p>
                 <p className="mt-1 text-xs text-ink/55">
-                  {roleLabel} · {planLabel}
+                  {roleLabel} {"\u00B7"} {planLabel}
                 </p>
               </div>
 

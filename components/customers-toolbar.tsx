@@ -29,10 +29,10 @@ type RecognitionWindow = typeof window & {
 
 export function CustomersToolbar({
   initialQuery,
-  isOwner,
+  canManageCustomers,
 }: {
   initialQuery: string;
-  isOwner: boolean;
+  canManageCustomers: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -146,7 +146,7 @@ export function CustomersToolbar({
           </button>
         </div>
 
-        {isOwner ? (
+        {canManageCustomers ? (
           <button
             type="button"
             onClick={() => setIsModalOpen(true)}
@@ -159,7 +159,7 @@ export function CustomersToolbar({
 
       {searchMessage ? <p className="mt-3 text-sm text-ink/65">{searchMessage}</p> : null}
 
-      {isOwner && isModalOpen ? (
+      {canManageCustomers && isModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-4 sm:items-center">
           <div className="w-full max-w-2xl rounded-[28px] border border-line bg-paper p-4 shadow-xl sm:p-6">
             <div className="flex items-start justify-between gap-4">

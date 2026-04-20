@@ -1,13 +1,21 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { signUpAction } from "@/app/actions";
+import { AuthFormShell } from "@/components/auth-form-shell";
 import { SubmitButton } from "@/components/submit-button";
+import { getWorkspaceStateIfSignedIn } from "@/lib/auth";
 
 export default async function SignupPage({
   searchParams
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const params = await searchParams;
+  await searchParams;
+  const session = await getWorkspaceStateIfSignedIn();
+
+  if (session) {
+    redirect(session.context ? "/dashboard" : "/setup");
+  }
 
   return (
     <main className="page-shell items-center justify-center">
@@ -18,7 +26,7 @@ export default async function SignupPage({
           Sign up first, then add your store name and start writing baaki.
         </p>
 
-        <form
+        <AuthFormShell
           action={signUpAction}
           className="mt-6 space-y-4"
         >
@@ -46,7 +54,7 @@ export default async function SignupPage({
             pending="Creating..."
             className="button-primary w-full text-base"
           />
-        </form>
+        </AuthFormShell>
 
         <p className="mt-5 text-sm text-ink/70">
           Already registered?{" "}
