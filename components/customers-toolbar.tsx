@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CustomerVoiceForm } from "@/components/customer-voice-form";
 
@@ -42,9 +42,22 @@ export function CustomersToolbar({
   const [searchListening, setSearchListening] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [, startTransition] = useTransition();
+  const lastAppliedUrlQueryRef = useRef(initialQuery);
+  const pendingQueryRef = useRef(initialQuery);
 
   useEffect(() => {
-    setQuery(initialQuery);
+    const nextInitialQuery = initialQuery.trim();
+    const localQuery = query.trim();
+    const lastAppliedUrlQuery = lastAppliedUrlQueryRef.current;
+    const pendingQuery = pendingQueryRef.current;
+
+    // Ignore stale server responses while the user is still typing ahead locally.
+    if (nextInitialQuery !== pendingQuery && localQuery !== lastAppliedUrlQuery) {
+      return;
+    }
+
+    lastAppliedUrlQueryRef.current = nextInitialQuery;
+    setQuery(nextInitialQuery);
   }, [initialQuery]);
 
   useEffect(() => {
@@ -55,19 +68,31 @@ export function CustomersToolbar({
       return;
     }
 
-    const params = new URLSearchParams(searchParams.toString());
+    pendingQueryRef.current = nextQuery;
 
-    if (nextQuery) {
-      params.set("q", nextQuery);
-    } else {
-      params.delete("q");
-    }
+    const timeoutId = window.setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
 
-    startTransition(() => {
-      router.replace(params.size ? `${pathname}?${params.toString()}` : pathname, {
-        scroll: false,
+      if (nextQuery) {
+        params.set("q", nextQuery);
+      } else {
+        params.delete("q");
+      }
+
+      if (params.get("page")) {
+        params.delete("page");
+      }
+
+      startTransition(() => {
+        router.replace(params.size ? `${pathname}?${params.toString()}` : pathname, {
+          scroll: false,
+        });
       });
-    });
+    }, 260);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [pathname, query, router, searchParams]);
 
   function startVoiceSearch() {

@@ -35,14 +35,27 @@ export function CustomerCardMenu({
 
       const rect = buttonRef.current.getBoundingClientRect();
       const menuWidth = menuRef.current?.offsetWidth ?? 192;
+      const menuHeight = menuRef.current?.offsetHeight ?? 168;
       const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
       const nextLeft = Math.min(
         Math.max(12, rect.right - menuWidth),
         viewportWidth - menuWidth - 12,
       );
+      const availableBelow = viewportHeight - rect.bottom - 12;
+      const availableAbove = rect.top - 12;
+      const shouldOpenAbove =
+        availableBelow < menuHeight && availableAbove > availableBelow;
+      const preferredTop = shouldOpenAbove
+        ? rect.top - menuHeight - 8
+        : rect.bottom + 8;
+      const nextTop = Math.min(
+        Math.max(12, preferredTop),
+        viewportHeight - menuHeight - 12,
+      );
 
       setPosition({
-        top: rect.bottom + 8,
+        top: nextTop,
         left: nextLeft,
       });
     };

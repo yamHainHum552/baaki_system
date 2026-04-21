@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getCashFlowForecast,
   getCustomerInsights,
+  getCustomerInsightsBatch,
   getReports,
   getTopDebtors,
   type CashFlowForecast,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/entitlements";
 import { PremiumAccessError } from "@/lib/premium-errors";
 import { calculateRiskIndicator } from "@/lib/risk";
+import { filterCustomers } from "@/lib/customer-search";
 
 export type CustomerBalance = {
   customer_id: string;
@@ -34,6 +36,7 @@ export type CustomerBalance = {
   payment_frequency: number | null;
   risk_score: number | null;
   risk_level: "LOW" | "MEDIUM" | "HIGH" | null;
+  customer_created_at?: string | null;
 };
 
 export type LedgerRow = {
@@ -73,6 +76,14 @@ export type MultiStoreOverview = {
   highDueCount: number;
 };
 
+export type CustomerPageResult = {
+  customers: CustomerBalance[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
 export async function listCustomersWithBalance(
   supabase: any,
   storeId: string,
@@ -80,12 +91,51 @@ export async function listCustomersWithBalance(
   riskThreshold = 1000
 ): Promise<CustomerBalance[]> {
   if (!search) {
-    return withCache(`customers:${storeId}`, 20_000, async () =>
+    return withCache(`customers:${storeId}:all`, 20_000, async () =>
       fetchCustomersWithBalance(supabase, storeId, undefined, riskThreshold)
     );
   }
 
   return fetchCustomersWithBalance(supabase, storeId, search, riskThreshold);
+}
+
+export async function listCustomersPageWithBalance(
+  supabase: any,
+  storeId: string,
+  options?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    riskThreshold?: number;
+  },
+): Promise<CustomerPageResult> {
+  const page = Math.max(options?.page ?? 1, 1);
+  const pageSize = Math.max(options?.pageSize ?? 20, 1);
+  const search = options?.search?.trim() || undefined;
+  const riskThreshold = options?.riskThreshold ?? 1000;
+  const normalizedSearch = search?.toLowerCase() ?? "";
+
+  if (!search) {
+    return withCache(`customers:${storeId}:page:${page}:${pageSize}`, 20_000, async () =>
+      fetchCustomersPageWithoutSearch(supabase, storeId, {
+        page,
+        pageSize,
+        riskThreshold,
+      }),
+    );
+  }
+
+  return withCache(
+    `customers:${storeId}:search:${encodeURIComponent(normalizedSearch)}:page:${page}:${pageSize}`,
+    20_000,
+    async () =>
+      fetchCustomersPageWithSearch(supabase, storeId, {
+        page,
+        pageSize,
+        search,
+        riskThreshold,
+      }),
+  );
 }
 
 async function fetchCustomersWithBalance(
@@ -98,7 +148,7 @@ async function fetchCustomersWithBalance(
     .from("customer_balances")
     .select("*")
     .eq("store_id", storeId)
-    .order("balance", { ascending: false })
+    .order("last_entry_at", { ascending: false, nullsFirst: false })
     .order("customer_name", { ascending: true });
 
   if (search) {
@@ -111,27 +161,282 @@ async function fetchCustomersWithBalance(
     throw new Error(error.message);
   }
 
-  const customers = (data ?? []).map((row: any) => ({
+  const customerRows = (data ?? []).map((row: any) => ({
     ...row,
     baaki_total: Number(row.baaki_total ?? 0),
     payment_total: Number(row.payment_total ?? 0),
     balance: Number(row.balance ?? 0)
   }));
 
-  const insights = await Promise.all(
-    customers.map((customer: CustomerBalance) =>
-      getCustomerInsights(supabase, customer.customer_id, riskThreshold)
-    )
+  const customerIds = customerRows.map((row: CustomerBalance) => row.customer_id);
+  const createdAtMap = new Map<string, string | null>();
+
+  if (customerIds.length > 0) {
+    const { data: customerMeta, error: customerMetaError } = await supabase
+      .from("customers")
+      .select("id, created_at")
+      .in("id", customerIds);
+
+    if (customerMetaError) {
+      throw new Error(customerMetaError.message);
+    }
+
+    for (const row of customerMeta ?? []) {
+      createdAtMap.set(row.id, row.created_at ?? null);
+    }
+  }
+
+  const customers = customerRows
+    .map((row: CustomerBalance) => ({
+      ...row,
+      customer_created_at: createdAtMap.get(row.customer_id) ?? null,
+    }))
+    .sort((left: CustomerBalance, right: CustomerBalance) => {
+      const leftTimestamp = left.last_entry_at ?? left.customer_created_at ?? null;
+      const rightTimestamp = right.last_entry_at ?? right.customer_created_at ?? null;
+
+      if (leftTimestamp && rightTimestamp) {
+        const timeDiff = new Date(rightTimestamp).getTime() - new Date(leftTimestamp).getTime();
+        if (timeDiff !== 0) {
+          return timeDiff;
+        }
+      } else if (rightTimestamp) {
+        return 1;
+      } else if (leftTimestamp) {
+        return -1;
+      }
+
+      return left.customer_name.localeCompare(right.customer_name);
+    });
+
+  return addCustomerInsights(supabase, customers, riskThreshold);
+}
+
+async function fetchCustomersPageWithoutSearch(
+  supabase: any,
+  storeId: string,
+  options: {
+    page: number;
+    pageSize: number;
+    riskThreshold: number;
+  },
+): Promise<CustomerPageResult> {
+  const { data, error } = await supabase.rpc("get_customer_page", {
+    p_store_id: storeId,
+    p_page: options.page,
+    p_page_size: options.pageSize,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const customers = mapRpcCustomers(data ?? [], options.riskThreshold);
+  const total = Number(data?.[0]?.total_count ?? 0);
+  return {
+    customers,
+    total,
+    page: options.page,
+    pageSize: options.pageSize,
+    totalPages: Math.max(Math.ceil(total / options.pageSize), 1),
+  };
+}
+
+async function fetchCustomersPageWithSearch(
+  supabase: any,
+  storeId: string,
+  options: {
+    page: number;
+    pageSize: number;
+    search: string;
+    riskThreshold: number;
+  },
+): Promise<CustomerPageResult> {
+  const candidates = await withCache(
+    `customers:${storeId}:search-base:${encodeURIComponent(options.search.toLowerCase())}`,
+    20_000,
+    async () => fetchCustomerSearchCandidates(supabase, storeId, options.search, options.riskThreshold),
   );
 
-  return customers.map((customer: CustomerBalance, index: number) => ({
+  const filteredCustomers = filterCustomers(candidates, options.search);
+  const total = filteredCustomers.length;
+  const offset = (options.page - 1) * options.pageSize;
+  const customers = filteredCustomers.slice(offset, offset + options.pageSize);
+
+  return {
+    customers,
+    total,
+    page: options.page,
+    pageSize: options.pageSize,
+    totalPages: Math.max(Math.ceil(total / options.pageSize), 1),
+  };
+}
+
+async function fetchCustomerSearchCandidates(
+  supabase: any,
+  storeId: string,
+  search: string,
+  riskThreshold: number,
+) {
+  const { data, error } = await supabase.rpc("search_customer_candidates", {
+    p_store_id: storeId,
+    p_query: search,
+    p_limit: 240,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapRpcCustomers(data ?? [], riskThreshold);
+}
+
+function mapRpcCustomers(rows: any[], riskThreshold: number) {
+  return rows.map((row) => {
+    const balance = Number(row.balance ?? 0);
+    const daysSinceLastPayment =
+      row.days_since_last_payment == null ? null : Number(row.days_since_last_payment);
+    const risk = calculateRiskIndicator({
+      daysSinceLastPayment,
+      totalBaaki: balance,
+      threshold: riskThreshold,
+    });
+
+    return {
+      customer_id: row.customer_id,
+      customer_name: row.customer_name,
+      phone: row.phone ?? null,
+      address: row.address ?? null,
+      baaki_total: Number(row.baaki_total ?? 0),
+      payment_total: Number(row.payment_total ?? 0),
+      balance,
+      last_entry_at: row.last_entry_at ?? null,
+      customer_created_at: row.customer_created_at ?? null,
+      last_payment_date: row.last_payment_date ?? null,
+      days_since_last_payment: daysSinceLastPayment,
+      payment_frequency: row.payment_frequency == null ? null : Number(row.payment_frequency),
+      risk_score: Number(risk.score.toFixed(2)),
+      risk_level: risk.level,
+    } satisfies CustomerBalance;
+  });
+}
+
+async function enrichCustomersWithBalancesAndInsights(
+  supabase: any,
+  customerRows: Array<{
+    id: string;
+    name: string;
+    phone: string | null;
+    address: string | null;
+    created_at: string | null;
+  }>,
+  riskThreshold: number,
+) {
+  const balanceRows = customerRows.length
+    ? await fetchBalanceRowsForCustomerIds(
+        supabase,
+        customerRows.map((row) => row.id),
+      )
+    : [];
+
+  const mergedCustomers = mergeCustomersWithBalances(customerRows, balanceRows);
+  return addCustomerInsights(supabase, mergedCustomers, riskThreshold);
+}
+
+async function fetchBalanceRowsForCustomerIds(supabase: any, customerIds: string[]) {
+  const { data, error } = await supabase
+    .from("customer_balances")
+    .select("customer_id, baaki_total, payment_total, balance, last_entry_at")
+    .in("customer_id", customerIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ?? [];
+}
+
+function mergeCustomersWithBalances(
+  customerRows: Array<{
+    id: string;
+    name: string;
+    phone: string | null;
+    address: string | null;
+    created_at: string | null;
+  }>,
+  balanceRows: Array<{
+    customer_id: string;
+    baaki_total?: number | string | null;
+    payment_total?: number | string | null;
+    balance?: number | string | null;
+    last_entry_at?: string | null;
+  }>,
+) {
+  const balanceMap = new Map(
+    balanceRows.map((row) => [
+      row.customer_id,
+      {
+        baaki_total: Number(row.baaki_total ?? 0),
+        payment_total: Number(row.payment_total ?? 0),
+        balance: Number(row.balance ?? 0),
+        last_entry_at: row.last_entry_at ?? null,
+      },
+    ]),
+  );
+
+  return customerRows.map((row) => {
+    const balanceRow = balanceMap.get(row.id);
+
+    return {
+      customer_id: row.id,
+      customer_name: row.name,
+      phone: row.phone ?? null,
+      address: row.address ?? null,
+      baaki_total: balanceRow?.baaki_total ?? 0,
+      payment_total: balanceRow?.payment_total ?? 0,
+      balance: balanceRow?.balance ?? 0,
+      last_entry_at: balanceRow?.last_entry_at ?? null,
+      last_payment_date: null,
+      days_since_last_payment: null,
+      payment_frequency: null,
+      risk_score: null,
+      risk_level: null,
+      customer_created_at: row.created_at ?? null,
+    } satisfies CustomerBalance;
+  });
+}
+
+async function addCustomerInsights(
+  supabase: any,
+  customers: CustomerBalance[],
+  riskThreshold: number,
+) {
+  const insightsMap = await getCustomerInsightsBatch(
+    supabase,
+    customers.map((customer) => customer.customer_id),
+    customers.map((customer) => ({
+      customer_id: customer.customer_id,
+      balance: customer.balance,
+    })),
+    riskThreshold,
+  );
+
+  return customers.map((customer) => {
+    const insights = insightsMap.get(customer.customer_id);
+
+    if (!insights) {
+      return customer;
+    }
+
+    return {
     ...customer,
-    last_payment_date: insights[index].last_payment_date,
-    days_since_last_payment: insights[index].days_since_last_payment,
-    payment_frequency: insights[index].payment_frequency,
-    risk_score: insights[index].risk_score,
-    risk_level: insights[index].risk_level
-  }));
+      last_payment_date: insights.last_payment_date,
+      days_since_last_payment: insights.days_since_last_payment,
+      payment_frequency: insights.payment_frequency,
+      risk_score: insights.risk_score,
+      risk_level: insights.risk_level,
+    };
+  });
 }
 
 export async function getDashboardSummary(
@@ -214,7 +519,7 @@ export async function getCustomerLedger(
     ...row,
     amount: Number(row.amount),
     balance: Number(row.balance)
-  })).reverse();
+  }));
 
   const currentBalance = insights.total_baaki;
 

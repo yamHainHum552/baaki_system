@@ -1,4 +1,5 @@
 create extension if not exists pgcrypto;
+create extension if not exists pg_trgm;
 
 do $$
 begin
@@ -367,6 +368,10 @@ where false;
 
 create index if not exists customers_store_id_idx on public.customers(store_id);
 create index if not exists customers_name_idx on public.customers(store_id, name);
+create index if not exists customers_store_created_idx on public.customers(store_id, created_at desc);
+create index if not exists customers_name_trgm_idx on public.customers using gin (lower(name) gin_trgm_ops);
+create index if not exists customers_phone_trgm_idx on public.customers using gin (lower(coalesce(phone, '')) gin_trgm_ops);
+create index if not exists customers_address_trgm_idx on public.customers using gin (lower(coalesce(address, '')) gin_trgm_ops);
 create index if not exists ledger_entries_store_id_idx on public.ledger_entries(store_id);
 create index if not exists ledger_entries_customer_created_idx on public.ledger_entries(customer_id, created_at, id);
 create index if not exists ledger_entries_store_customer_idx on public.ledger_entries(store_id, customer_id);
@@ -905,6 +910,231 @@ as $$
   from totals t
   full outer join payments p on true
   group by t.last_payment_date, t.total_baaki;
+$$;
+
+create or replace function public.get_customer_page(
+  p_store_id uuid default public.current_store_id(),
+  p_page integer default 1,
+  p_page_size integer default 20
+)
+returns table (
+  customer_id uuid,
+  customer_name text,
+  phone text,
+  address text,
+  baaki_total numeric(12, 2),
+  payment_total numeric(12, 2),
+  balance numeric(12, 2),
+  last_entry_at timestamptz,
+  customer_created_at timestamptz,
+  last_payment_date timestamptz,
+  days_since_last_payment integer,
+  payment_frequency numeric(12, 2),
+  total_count bigint
+)
+language sql
+stable
+as $$
+  with payment_rows as (
+    select
+      l.customer_id,
+      l.created_at,
+      lag(l.created_at) over (
+        partition by l.customer_id
+        order by l.created_at asc
+      ) as previous_payment_at
+    from public.ledger_entries l
+    where l.store_id = coalesce(p_store_id, public.current_store_id())
+      and l.type = 'PAYMENT'
+  ),
+  payment_summary as (
+    select
+      pr.customer_id,
+      max(pr.created_at) as last_payment_date,
+      case
+        when max(pr.created_at) is null then null
+        else (current_date - date(max(pr.created_at)))::integer
+      end as days_since_last_payment,
+      avg(
+        case
+          when pr.previous_payment_at is null then null
+          else extract(epoch from (pr.created_at - pr.previous_payment_at)) / 86400
+        end
+      )::numeric(12, 2) as payment_frequency
+    from payment_rows pr
+    group by pr.customer_id
+  ),
+  base as (
+    select
+      c.id as customer_id,
+      c.name as customer_name,
+      c.phone,
+      c.address,
+      coalesce(cb.baaki_total, 0)::numeric(12, 2) as baaki_total,
+      coalesce(cb.payment_total, 0)::numeric(12, 2) as payment_total,
+      coalesce(cb.balance, 0)::numeric(12, 2) as balance,
+      cb.last_entry_at,
+      c.created_at as customer_created_at,
+      ps.last_payment_date,
+      ps.days_since_last_payment,
+      ps.payment_frequency
+    from public.customers c
+    left join public.customer_balances cb on cb.customer_id = c.id
+    left join payment_summary ps on ps.customer_id = c.id
+    where c.store_id = coalesce(p_store_id, public.current_store_id())
+  )
+  select
+    base.*,
+    count(*) over() as total_count
+  from base
+  order by coalesce(base.last_entry_at, base.customer_created_at) desc, base.customer_name asc
+  limit greatest(coalesce(p_page_size, 20), 1)
+  offset greatest(coalesce(p_page, 1) - 1, 0) * greatest(coalesce(p_page_size, 20), 1);
+$$;
+
+create or replace function public.search_customer_candidates(
+  p_store_id uuid default public.current_store_id(),
+  p_query text default null,
+  p_limit integer default 240
+)
+returns table (
+  customer_id uuid,
+  customer_name text,
+  phone text,
+  address text,
+  baaki_total numeric(12, 2),
+  payment_total numeric(12, 2),
+  balance numeric(12, 2),
+  last_entry_at timestamptz,
+  customer_created_at timestamptz,
+  last_payment_date timestamptz,
+  days_since_last_payment integer,
+  payment_frequency numeric(12, 2),
+  search_rank numeric
+)
+language sql
+stable
+as $$
+  with input as (
+    select
+      lower(btrim(coalesce(p_query, ''))) as q,
+      left(lower(btrim(coalesce(p_query, ''))), 3) as root,
+      array_remove(
+        regexp_split_to_array(
+          regexp_replace(lower(btrim(coalesce(p_query, ''))), '[^[:alnum:]\s]+', ' ', 'g'),
+          '\s+'
+        ),
+        ''
+      ) as tokens
+  ),
+  payment_rows as (
+    select
+      l.customer_id,
+      l.created_at,
+      lag(l.created_at) over (
+        partition by l.customer_id
+        order by l.created_at asc
+      ) as previous_payment_at
+    from public.ledger_entries l
+    where l.store_id = coalesce(p_store_id, public.current_store_id())
+      and l.type = 'PAYMENT'
+  ),
+  payment_summary as (
+    select
+      pr.customer_id,
+      max(pr.created_at) as last_payment_date,
+      case
+        when max(pr.created_at) is null then null
+        else (current_date - date(max(pr.created_at)))::integer
+      end as days_since_last_payment,
+      avg(
+        case
+          when pr.previous_payment_at is null then null
+          else extract(epoch from (pr.created_at - pr.previous_payment_at)) / 86400
+        end
+      )::numeric(12, 2) as payment_frequency
+    from payment_rows pr
+    group by pr.customer_id
+  ),
+  base as (
+    select
+      c.id as customer_id,
+      c.name as customer_name,
+      c.phone,
+      c.address,
+      coalesce(cb.baaki_total, 0)::numeric(12, 2) as baaki_total,
+      coalesce(cb.payment_total, 0)::numeric(12, 2) as payment_total,
+      coalesce(cb.balance, 0)::numeric(12, 2) as balance,
+      cb.last_entry_at,
+      c.created_at as customer_created_at,
+      ps.last_payment_date,
+      ps.days_since_last_payment,
+      ps.payment_frequency
+    from public.customers c
+    left join public.customer_balances cb on cb.customer_id = c.id
+    left join payment_summary ps on ps.customer_id = c.id
+    where c.store_id = coalesce(p_store_id, public.current_store_id())
+  ),
+  candidates as (
+    select
+      b.*,
+      (
+        case when lower(b.customer_name) = i.q then 3.0 else 0 end +
+        case when lower(b.customer_name) like i.q || '%' then 2.1 else 0 end +
+        case when lower(b.customer_name) like '%' || i.q || '%' then 1.5 else 0 end +
+        case
+          when char_length(i.root) >= 3 and lower(b.customer_name) like '%' || i.root || '%'
+            then 0.8
+          else 0
+        end +
+        greatest(
+          similarity(lower(b.customer_name), i.q),
+          similarity(lower(coalesce(b.address, '')), i.q),
+          case
+            when lower(coalesce(b.phone, '')) like '%' || i.q || '%' then 0.6
+            else 0
+          end
+        ) +
+        coalesce((
+          select sum(
+            case
+              when length(token) >= 3 and lower(b.customer_name) like '%' || token || '%' then 0.5
+              when length(token) >= 3 and lower(coalesce(b.address, '')) like '%' || token || '%' then 0.25
+              when length(token) >= 2 and lower(coalesce(b.phone, '')) like '%' || token || '%' then 0.4
+              else 0
+            end
+          )
+          from unnest(i.tokens) token
+        ), 0)
+      )::numeric as search_rank
+    from base b
+    cross join input i
+    where i.q <> ''
+      and (
+        lower(b.customer_name) % i.q
+        or lower(b.customer_name) like '%' || i.q || '%'
+        or (char_length(i.root) >= 3 and lower(b.customer_name) like '%' || i.root || '%')
+        or exists (
+          select 1
+          from unnest(i.tokens) token
+          where length(token) >= 3
+            and lower(b.customer_name) like '%' || token || '%'
+        )
+        or lower(coalesce(b.phone, '')) like '%' || i.q || '%'
+        or exists (
+          select 1
+          from unnest(i.tokens) token
+          where length(token) >= 2
+            and lower(coalesce(b.phone, '')) like '%' || token || '%'
+        )
+        or lower(coalesce(b.address, '')) % i.q
+        or lower(coalesce(b.address, '')) like '%' || i.q || '%'
+      )
+  )
+  select *
+  from candidates
+  order by search_rank desc, coalesce(last_entry_at, customer_created_at) desc, customer_name asc
+  limit greatest(coalesce(p_limit, 240), 1);
 $$;
 
 create or replace function public.get_store_daily_report(

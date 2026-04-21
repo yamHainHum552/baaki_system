@@ -107,6 +107,7 @@ export async function createStoreAction(formData: FormData) {
     redirect("/setup?error=Unable%20to%20create%20store");
   }
 
+  clearCache(`workspace:${user.id}`);
   redirect("/dashboard");
 }
 
@@ -171,7 +172,7 @@ export async function createLedgerEntryAction(formData: FormData) {
 }
 
 export async function switchStoreAction(formData: FormData) {
-  const { supabase } = await requireStoreContext();
+  const { supabase, userId } = await requireStoreContext();
   const storeId = String(formData.get("store_id") ?? "");
 
   if (!storeId) {
@@ -188,11 +189,12 @@ export async function switchStoreAction(formData: FormData) {
 
   const cookieStore = await cookies();
   cookieStore.set("active_store_id", storeId);
+  clearCache(`workspace:${userId}`);
   redirect("/dashboard");
 }
 
 export async function requestPremiumPlanAction(formData: FormData) {
-  const { supabase, store } = await requireStoreRole(
+  const { supabase, store, userId } = await requireStoreRole(
     "OWNER",
     "/dashboard?error=Only%20owners%20can%20request%20Premium",
   );
@@ -209,13 +211,14 @@ export async function requestPremiumPlanAction(formData: FormData) {
     redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
   }
 
+  clearCache(`workspace:${userId}`);
   revalidatePath("/dashboard");
   revalidatePath("/settings");
   redirect("/dashboard?message=Premium%20request%20sent");
 }
 
 export async function startTrialAction() {
-  const { supabase, store } = await requireStoreRole(
+  const { supabase, store, userId } = await requireStoreRole(
     "OWNER",
     "/dashboard?error=Only%20owners%20can%20start%20a%20trial",
   );
@@ -230,6 +233,7 @@ export async function startTrialAction() {
 
   clearCache(`dashboard:${store.id}`);
   clearCache(`customers:${store.id}`);
+  clearCache(`workspace:${userId}`);
   revalidatePath("/dashboard");
   revalidatePath("/settings");
   redirect("/dashboard?message=Free%20trial%20started");
@@ -490,13 +494,14 @@ export async function addStaffMemberAction(formData: FormData) {
 
   clearCache(`dashboard:${store.id}`);
   clearCache(`customers:${store.id}`);
+  clearCache(`workspace:${userId}`);
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   redirect("/settings?message=Staff%20member%20added");
 }
 
 export async function removeStaffMemberAction(formData: FormData) {
-  const { supabase, store } = await requireStoreRole(
+  const { supabase, store, userId } = await requireStoreRole(
     "OWNER",
     "/settings?error=Only%20owners%20can%20manage%20staff",
   );
@@ -548,13 +553,14 @@ export async function removeStaffMemberAction(formData: FormData) {
 
   clearCache(`dashboard:${store.id}`);
   clearCache(`customers:${store.id}`);
+  clearCache(`workspace:${userId}`);
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   redirect("/settings?message=Staff%20member%20removed");
 }
 
 export async function updateStaffPermissionsAction(formData: FormData) {
-  const { supabase, store } = await requireStoreRole(
+  const { supabase, store, userId } = await requireStoreRole(
     "OWNER",
     "/settings?error=Only%20owners%20can%20manage%20staff",
   );
@@ -601,6 +607,7 @@ export async function updateStaffPermissionsAction(formData: FormData) {
 
   clearCache(`dashboard:${store.id}`);
   clearCache(`customers:${store.id}`);
+  clearCache(`workspace:${userId}`);
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   redirect("/settings?message=Staff%20permissions%20updated");

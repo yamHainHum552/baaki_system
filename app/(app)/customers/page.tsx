@@ -1,43 +1,40 @@
 import Link from "next/link";
 import { CustomerListCard } from "@/components/customer-list-card";
-import { CustomersToolbar } from "@/components/customers-toolbar";
+import { CustomersPagination } from "@/components/customers-pagination";
 import { CustomersResultsSummary } from "@/components/customers-results-summary";
-import { listCustomersWithBalance } from "@/lib/baaki";
+import { CustomersToolbar } from "@/components/customers-toolbar";
+import { listCustomersPageWithBalance } from "@/lib/baaki";
 import { requireStoreContext } from "@/lib/auth";
 import { hasStorePermission } from "@/lib/store-permissions";
-import { formatCurrency } from "@/lib/utils";
 
-type CustomerListItem = {
-  customer_id: string;
-  customer_name: string;
-  phone: string | null;
-  address: string | null;
-  balance: number;
-  days_since_last_payment: number | null;
-  risk_level: "LOW" | "MEDIUM" | "HIGH" | null;
-};
+const CUSTOMERS_PAGE_SIZE = 20;
 
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
   const { supabase, store } = await requireStoreContext();
   const params = await searchParams;
   const query = String(params.q ?? "").trim();
-  const customers = await listCustomersWithBalance(
-    supabase,
-    store.id,
-    undefined,
-    store.risk_threshold,
-  );
+  const page = Math.max(Number(params.page ?? "1") || 1, 1);
+
+  const customerPage = await listCustomersPageWithBalance(supabase, store.id, {
+    page,
+    pageSize: CUSTOMERS_PAGE_SIZE,
+    search: query || undefined,
+    riskThreshold: store.risk_threshold,
+  });
+
   const canManageCustomers = hasStorePermission(
     store.role,
     store.permissions,
     "manage_customers",
   );
-  const filteredCustomers = filterCustomers(customers, query);
-  const totalDue = filteredCustomers.reduce((sum, customer) => sum + customer.balance, 0);
+  const totalDue = customerPage.customers.reduce(
+    (sum, customer) => sum + customer.balance,
+    0,
+  );
 
   return (
     <div className="section-spacing">
@@ -62,18 +59,18 @@ export default async function CustomersPage({
             </h1>
           </div>
 
-          <CustomersResultsSummary count={filteredCustomers.length} totalDue={totalDue} />
+          <CustomersResultsSummary count={customerPage.total} totalDue={totalDue} />
         </div>
 
         <CustomersToolbar initialQuery={query} canManageCustomers={canManageCustomers} />
 
-        <CustomersResultsSummary count={filteredCustomers.length} totalDue={totalDue} mobile />
+        <CustomersResultsSummary count={customerPage.total} totalDue={totalDue} mobile />
       </section>
 
       <section className="surface-panel p-2.5 sm:p-4">
         <div className="customer-list-stack space-y-2.5">
-          {filteredCustomers.length ? (
-            filteredCustomers.map((customer) => (
+          {customerPage.customers.length ? (
+            customerPage.customers.map((customer) => (
               <CustomerListCard
                 key={customer.customer_id}
                 customer={customer}
@@ -86,76 +83,15 @@ export default async function CustomersPage({
             </div>
           )}
         </div>
+
+        {customerPage.totalPages > 1 ? (
+          <CustomersPagination
+            page={customerPage.page}
+            totalPages={customerPage.totalPages}
+            query={query}
+          />
+        ) : null}
       </section>
     </div>
   );
-}
-
-function filterCustomers(customers: CustomerListItem[], query: string) {
-  const term = query.trim().toLowerCase();
-
-  if (!term) {
-    return customers;
-  }
-
-  return [...customers]
-    .map((customer) => ({
-      customer,
-      score: getCustomerSearchScore(customer, term),
-    }))
-    .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .map((item) => item.customer);
-}
-
-function getCustomerSearchScore(customer: CustomerListItem, term: string) {
-  const tokens = term.split(/\s+/).filter(Boolean);
-
-  if (!tokens.length) {
-    return 1;
-  }
-
-  const name = customer.customer_name.toLowerCase();
-  const phone = (customer.phone ?? "").toLowerCase();
-  const address = (customer.address ?? "").toLowerCase();
-  const risk = (customer.risk_level ?? "").toLowerCase();
-  const balance = String(Math.round(customer.balance));
-
-  let score = 0;
-
-  for (const token of tokens) {
-    if (name.startsWith(token)) {
-      score += 10;
-      continue;
-    }
-
-    if (name.includes(token)) {
-      score += 7;
-      continue;
-    }
-
-    if (phone.includes(token)) {
-      score += 6;
-      continue;
-    }
-
-    if (address.includes(token)) {
-      score += 5;
-      continue;
-    }
-
-    if (risk.includes(token)) {
-      score += 4;
-      continue;
-    }
-
-    if (balance.includes(token)) {
-      score += 3;
-      continue;
-    }
-
-    return 0;
-  }
-
-  return score;
 }

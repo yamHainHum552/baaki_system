@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createCustomer, listCustomersWithBalance } from "@/lib/baaki";
+import { createCustomer, listCustomersPageWithBalance } from "@/lib/baaki";
 import { logSubscriptionEvent } from "@/lib/billing";
 import {
   getStoreContextForApi,
@@ -15,11 +15,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: context.error }, { status: context.status });
     }
     const url = new URL(request.url);
-    const customers = await listCustomersWithBalance(
+    const customers = await listCustomersPageWithBalance(
       context.supabase,
       context.store.id,
-      url.searchParams.get("q") ?? undefined,
-      context.store.risk_threshold
+      {
+        page: Number(url.searchParams.get("page") ?? "1"),
+        pageSize: Number(url.searchParams.get("pageSize") ?? "20"),
+        search: url.searchParams.get("q") ?? undefined,
+        riskThreshold: context.store.risk_threshold,
+      },
     );
 
     return NextResponse.json(customers);

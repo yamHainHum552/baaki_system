@@ -78,6 +78,92 @@ export async function getCustomerInsights(
   };
 }
 
+export async function getCustomerInsightsBatch(
+  supabase: any,
+  customerIds: string[],
+  balances: Array<{ customer_id: string; balance: number }>,
+  threshold = 1000,
+): Promise<Map<string, CustomerInsights>> {
+  const uniqueCustomerIds = [...new Set(customerIds.filter(Boolean))];
+  const balanceMap = new Map(
+    balances.map((customer) => [customer.customer_id, Number(customer.balance ?? 0)]),
+  );
+
+  if (!uniqueCustomerIds.length) {
+    return new Map();
+  }
+
+  const { data, error } = await supabase
+    .from("ledger_entries")
+    .select("customer_id, created_at")
+    .in("customer_id", uniqueCustomerIds)
+    .eq("type", "PAYMENT")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const paymentsByCustomer = new Map<string, string[]>();
+  for (const row of data ?? []) {
+    const existing = paymentsByCustomer.get(row.customer_id) ?? [];
+    existing.push(row.created_at);
+    paymentsByCustomer.set(row.customer_id, existing);
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const insights = new Map<string, CustomerInsights>();
+  for (const customerId of uniqueCustomerIds) {
+    const paymentDates = paymentsByCustomer.get(customerId) ?? [];
+    const lastPaymentDate = paymentDates.length ? paymentDates[paymentDates.length - 1] : null;
+    const daysSinceLastPayment = lastPaymentDate
+      ? Math.floor((today.getTime() - startOfDay(lastPaymentDate).getTime()) / 86_400_000)
+      : null;
+
+    let paymentFrequency: number | null = null;
+    if (paymentDates.length >= 2) {
+      let totalGapDays = 0;
+      let gapCount = 0;
+
+      for (let index = 1; index < paymentDates.length; index += 1) {
+        const previous = new Date(paymentDates[index - 1]).getTime();
+        const current = new Date(paymentDates[index]).getTime();
+        totalGapDays += (current - previous) / 86_400_000;
+        gapCount += 1;
+      }
+
+      paymentFrequency = Number((totalGapDays / gapCount).toFixed(2));
+    }
+
+    const totalBaaki = balanceMap.get(customerId) ?? 0;
+    const risk = calculateRiskIndicator({
+      daysSinceLastPayment,
+      totalBaaki,
+      threshold,
+    });
+
+    insights.set(customerId, {
+      customer_id: customerId,
+      last_payment_date: lastPaymentDate,
+      days_since_last_payment: daysSinceLastPayment,
+      total_baaki: totalBaaki,
+      payment_frequency: paymentFrequency,
+      risk_score: Number(risk.score.toFixed(2)),
+      risk_level: risk.level,
+    });
+  }
+
+  return insights;
+}
+
+function startOfDay(value: string) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
 export async function getReports(
   supabase: any,
   period: "day" | "month" = "day",

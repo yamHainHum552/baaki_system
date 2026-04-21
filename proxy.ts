@@ -3,11 +3,12 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 export async function proxy(request: NextRequest) {
   const { supabase, response } = updateSession(request);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   if (request.nextUrl.pathname.startsWith("/super-admin")) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
@@ -29,5 +30,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|apple-icon|icon|install-icon-192|install-icon-512).*)",
+  ],
 };
