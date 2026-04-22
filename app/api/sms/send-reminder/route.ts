@@ -4,7 +4,7 @@ import { logSubscriptionEvent } from "@/lib/billing";
 import { getCustomerLedger } from "@/lib/baaki";
 import { getStoreContextForApiWithPermission } from "@/lib/auth";
 import { toPremiumErrorPayload } from "@/lib/premium-errors";
-import { buildReminderMessage, sendSMS } from "@/lib/sms";
+import { buildReminderMessage, sendSMS, type ReminderTemplate } from "@/lib/sms";
 
 export async function POST(request: Request) {
   let context: Awaited<ReturnType<typeof getStoreContextForApiWithPermission>> | null = null;
@@ -20,6 +20,9 @@ export async function POST(request: Request) {
     });
 
     const body = await request.json();
+    const template = ["polite", "due_today", "final"].includes(body.template)
+      ? (body.template as ReminderTemplate)
+      : "polite";
     const ledger = await getCustomerLedger(context.supabase, body.customer_id, {
       riskThreshold: context.store.risk_threshold
     });
@@ -28,7 +31,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Customer phone number is missing." }, { status: 400 });
     }
 
-    const message = buildReminderMessage(ledger.currentBalance);
+    const message = buildReminderMessage(ledger.currentBalance, ledger.customer.name, template);
     const result = await sendSMS(ledger.customer.phone, message);
     await incrementStoreUsage(context.supabase, context.store.id, "sms");
 

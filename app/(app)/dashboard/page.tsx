@@ -8,7 +8,8 @@ import { RiskBadge } from "@/components/risk-badge";
 import { UsageProgress } from "@/components/usage-progress";
 import { getDashboardSummary, getOwnedStoresOverview } from "@/lib/baaki";
 import { requireStoreContext } from "@/lib/auth";
-import { canUseAdvancedReports, canUseForecast } from "@/lib/entitlements";
+import { canExportCsv, canUseAdvancedReports, canUseForecast } from "@/lib/entitlements";
+import { hasStorePermission } from "@/lib/store-permissions";
 import {
   formatBillingCycleLabel,
   formatCurrency,
@@ -42,6 +43,9 @@ export default async function DashboardPage({
     store.role === "OWNER" && store.memberships.filter((membership) => membership.role === "OWNER").length > 1
       ? await getOwnedStoresOverview(userId, store.id)
       : null;
+  const canExportStore =
+    hasStorePermission(store.role, store.permissions, "export_customer_ledger") &&
+    canExportCsv(store.entitlements);
 
   return (
     <div className="section-spacing">
@@ -252,6 +256,21 @@ export default async function DashboardPage({
               : "You can work with customers and ledgers normally. Subscription, billing, team management, and upgrade actions are handled by the owner."}
           </p>
           <div className="mt-4 space-y-3">
+            {canExportStore ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <a href="/api/export/store" className="button-secondary block text-center">
+                  Download CSV backup
+                </a>
+                <a
+                  href="/api/export/store?format=html"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="button-secondary block text-center"
+                >
+                  Open print backup
+                </a>
+              </div>
+            ) : null}
             <div className="soft-panel px-3 py-3">
               <p className="text-xs uppercase tracking-[0.18em] text-ink/50">
                 Locked features preview

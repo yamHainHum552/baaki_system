@@ -240,7 +240,7 @@ export async function startTrialAction() {
 }
 
 export async function deleteLedgerEntryAction(formData: FormData) {
-  const { supabase, store } = await requireStorePermission(
+  const { supabase, store, userId } = await requireStorePermission(
     "manage_ledger",
     "/customers?error=You%20do%20not%20have%20permission%20to%20delete%20ledger%20entries",
   );
@@ -290,6 +290,18 @@ export async function deleteLedgerEntryAction(formData: FormData) {
   if (error) {
     redirect(`/customers/${entry.customer_id}?error=${encodeURIComponent("Unable to delete ledger entry.")}`);
   }
+
+  await supabase.from("audit_logs").insert({
+    store_id: store.id,
+    actor_user_id: userId,
+    entity_type: "ledger_entry",
+    entity_id: entryId,
+    action: "DELETED",
+    details: {
+      customer_id: entry.customer_id,
+      description: entry.description,
+    },
+  });
 
   clearCache(`dashboard:${store.id}`);
   clearCache(`customers:${store.id}`);

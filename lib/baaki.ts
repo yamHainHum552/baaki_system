@@ -48,6 +48,14 @@ export type LedgerRow = {
   balance: number;
 };
 
+export type LedgerAuditEvent = {
+  id: string;
+  action: string;
+  created_at: string;
+  actor_user_id: string | null;
+  details: Record<string, unknown>;
+};
+
 export type DashboardSummary = {
   totalBaaki: number;
   totalCustomers: number;
@@ -535,6 +543,22 @@ export async function getCustomerLedger(
       totalPages: Math.max(Math.ceil((count ?? rows.length) / pageSize), 1)
     }
   };
+}
+
+export async function getCustomerLedgerAuditEvents(supabase: any, customerId: string) {
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select("id, action, created_at, actor_user_id, details")
+    .eq("entity_type", "ledger_entry")
+    .filter("details->>customer_id", "eq", customerId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as LedgerAuditEvent[];
 }
 
 export async function createCustomer(supabase: any, storeId: string, input: Record<string, unknown>) {

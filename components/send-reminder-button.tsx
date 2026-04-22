@@ -15,6 +15,7 @@ export function SendReminderButton({
   access: FeatureAccess;
 }) {
   const [message, setMessage] = useState("");
+  const [template, setTemplate] = useState("polite");
   const [sending, setSending] = useState(false);
   const { pushToast } = useToast();
 
@@ -28,7 +29,8 @@ export function SendReminderButton({
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          customer_id: customerId
+          customer_id: customerId,
+          template,
         })
       });
 
@@ -63,6 +65,17 @@ export function SendReminderButton({
       >
         {sending ? "Sending..." : "Send SMS reminder"}
       </button>
+      <select
+        value={template}
+        onChange={(event) => setTemplate(event.target.value)}
+        disabled={!enabled || sending || !access.allowed}
+        className="text-sm"
+        aria-label="Reminder template"
+      >
+        <option value="polite">Polite reminder</option>
+        <option value="due_today">Due today</option>
+        <option value="final">Final reminder</option>
+      </select>
       {!access.allowed ? (
         <div className="rounded-2xl bg-paper px-4 py-3">
           <div className="flex items-center gap-2">

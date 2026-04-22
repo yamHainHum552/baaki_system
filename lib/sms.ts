@@ -17,8 +17,21 @@ export async function sendSMS(phone: string, message: string) {
   }
 }
 
-export function buildReminderMessage(amount: number) {
-  return `Tapai ko Rs. ${Math.round(amount)} baaki cha. Kripaya tirnus.`;
+export type ReminderTemplate = "polite" | "due_today" | "final";
+
+export function buildReminderMessage(amount: number, customerName?: string | null, template: ReminderTemplate = "polite") {
+  const roundedAmount = Math.round(amount);
+  const name = customerName?.trim() ? `${customerName.trim()} ji, ` : "";
+
+  if (template === "due_today") {
+    return `${name}tapai ko Rs. ${roundedAmount} baaki cha. Aaja milayera tiridinu hola.`;
+  }
+
+  if (template === "final") {
+    return `${name}Rs. ${roundedAmount} baaki ajhai baki cha. Kripaya chadai bhuktani garnu hola.`;
+  }
+
+  return `${name}tapai ko Rs. ${roundedAmount} baaki cha. Kripaya tirnus.`;
 }
 
 async function sendViaSparrow(phone: string, message: string) {

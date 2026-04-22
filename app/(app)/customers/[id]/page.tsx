@@ -4,9 +4,10 @@ import { CustomerLedgerActions } from "@/components/customer-ledger-actions";
 import { CustomerLedgerHeader } from "@/components/customer-ledger-header";
 import { CustomerLedgerPagination } from "@/components/customer-ledger-pagination";
 import { CustomerLedgerTable } from "@/components/customer-ledger-table";
+import { LedgerAuditHistory } from "@/components/ledger-audit-history";
 import { MobileLedgerRow } from "@/components/mobile-ledger-row";
 import { StickyMobileActionBar } from "@/components/sticky-mobile-action-bar";
-import { getCustomerLedger } from "@/lib/baaki";
+import { getCustomerLedger, getCustomerLedgerAuditEvents } from "@/lib/baaki";
 import { requireStoreContext } from "@/lib/auth";
 import { hasStorePermission } from "@/lib/store-permissions";
 import {
@@ -74,6 +75,7 @@ export default async function CustomerLedgerPage({
       pageSize: 25,
       riskThreshold: store.risk_threshold,
     });
+  const auditEvents = await getCustomerLedgerAuditEvents(supabase, id);
 
   return (
     <div className="section-spacing pb-24 md:pb-0">
@@ -205,6 +207,14 @@ export default async function CustomerLedgerPage({
               page={pagination.page}
               totalPages={pagination.totalPages}
             />
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Ledger history"
+            subtitle="Recent created and deleted ledger activity."
+            defaultOpen={false}
+          >
+            <LedgerAuditHistory events={auditEvents} />
           </CollapsibleSection>
         </div>
       </div>

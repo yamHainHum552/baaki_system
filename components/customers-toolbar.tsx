@@ -195,9 +195,6 @@ export function CustomersToolbar({
                 <h2 className="mt-2 font-serif text-xl text-ink sm:text-2xl">
                   New customer khata
                 </h2>
-                <p className="mt-2 text-sm text-ink/65">
-                  Speak or type the details, then save once.
-                </p>
               </div>
               <button
                 type="button"
@@ -221,7 +218,7 @@ export function CustomersToolbar({
               </button>
             </div>
 
-            <div className="mt-5 max-h-[75vh] overflow-y-auto pr-1">
+            <div className="mt-4">
               <CustomerVoiceForm
                 compact
                 onSaved={() => {

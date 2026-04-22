@@ -3,10 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/components/toast-provider";
+import { enqueueOfflineItem, OFFLINE_STORES, readOfflineQueue, removeOfflineItem } from "@/lib/offline-queue";
 import { cn } from "@/lib/utils";
 
-const DB_NAME = "baaki-offline";
-const STORE_NAME = "ledgerQueue";
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "00", "0", "C"];
 
 type Mode = "baaki" | "payment";
@@ -117,7 +116,7 @@ export function QuickEntryForm({
     }
 
     if (!navigator.onLine) {
-      await enqueueEntry(payload);
+      await enqueueOfflineItem(OFFLINE_STORES.ledger, payload);
       setMessage(
         "Offline now. Entry saved in queue and will sync when internet returns.",
       );
@@ -331,7 +330,7 @@ export function QuickEntryForm({
           />
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
+        <div className="sticky bottom-20 z-20 grid gap-2 rounded-[24px] border border-line/80 bg-warm/95 p-2 shadow-ledger backdrop-blur sm:static sm:grid-cols-2 sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-0">
           <button
             type="submit"
             disabled={isSubmitting}
@@ -366,44 +365,6 @@ export function QuickEntryForm({
   );
 }
 
-async function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { autoIncrement: true });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function enqueueEntry(entry: QueueEntry) {
-  const db = await openDb();
-  const transaction = db.transaction(STORE_NAME, "readwrite");
-  transaction.objectStore(STORE_NAME).add(entry);
-  await transactionDone(transaction);
-}
-
-async function readQueue() {
-  const db = await openDb();
-  const transaction = db.transaction(STORE_NAME, "readonly");
-  const request = transaction.objectStore(STORE_NAME).getAll();
-  const entries = await requestToPromise<QueueEntry[]>(request);
-  const keysRequest = transaction.objectStore(STORE_NAME).getAllKeys();
-  const keys = await requestToPromise<IDBValidKey[]>(keysRequest);
-  return entries.map((entry, index) => ({ key: keys[index], entry }));
-}
-
-async function removeQueueItem(key: IDBValidKey) {
-  const db = await openDb();
-  const transaction = db.transaction(STORE_NAME, "readwrite");
-  transaction.objectStore(STORE_NAME).delete(key);
-  await transactionDone(transaction);
-}
-
 async function syncQueuedEntries(
   router: ReturnType<typeof useRouter>,
   setMessage: (message: string) => void,
@@ -417,7 +378,10 @@ async function syncQueuedEntries(
   let queued: Array<{ key: IDBValidKey; entry: QueueEntry }> = [];
 
   try {
-    queued = await readQueue();
+    queued = (await readOfflineQueue<QueueEntry>(OFFLINE_STORES.ledger)).map((queuedItem) => ({
+      key: queuedItem.key,
+      entry: queuedItem.item,
+    }));
   } catch {
     return;
   }
@@ -439,7 +403,7 @@ async function syncQueuedEntries(
     });
 
     if (response.ok) {
-      await removeQueueItem(item.key);
+      await removeOfflineItem(OFFLINE_STORES.ledger, item.key);
       syncedCount += 1;
     }
   }
@@ -463,19 +427,4 @@ async function syncQueuedEntries(
     tone: syncedCount > 0 ? "success" : "info",
   });
   router.refresh();
-}
-
-function requestToPromise<T>(request: IDBRequest<T>) {
-  return new Promise<T>((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function transactionDone(transaction: IDBTransaction) {
-  return new Promise<void>((resolve, reject) => {
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-    transaction.onabort = () => reject(transaction.error);
-  });
 }

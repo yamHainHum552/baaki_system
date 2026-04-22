@@ -379,6 +379,7 @@ create index if not exists ledger_entries_created_at_idx on public.ledger_entrie
 create index if not exists store_memberships_user_idx on public.store_memberships(user_id, store_id);
 create index if not exists customer_share_tokens_customer_idx on public.customer_share_tokens(customer_id, expires_at);
 create index if not exists audit_logs_store_created_idx on public.audit_logs(store_id, created_at desc);
+create index if not exists audit_logs_ledger_customer_idx on public.audit_logs((details->>'customer_id'), created_at desc) where entity_type = 'ledger_entry';
 create index if not exists subscription_upgrade_requests_store_idx on public.subscription_upgrade_requests(store_id, status);
 create index if not exists subscriptions_store_plan_idx on public.subscriptions(store_id, plan_type, plan_status);
 create index if not exists store_usage_counters_store_month_idx on public.store_usage_counters(store_id, usage_month desc);
