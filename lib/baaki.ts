@@ -607,14 +607,42 @@ export async function createLedgerEntry(
     created_at: string;
   }
 ) {
+  const amount = Number(input.amount);
   const payload = {
     store_id: storeId,
     customer_id: input.customer_id,
     type: input.type,
-    amount: input.amount,
+    amount,
     description: input.description?.trim() || null,
     created_at: input.created_at
   };
+
+  if (!payload.customer_id) {
+    throw new Error("Customer is required.");
+  }
+
+  if (payload.type !== "BAAKI" && payload.type !== "PAYMENT") {
+    throw new Error("Choose a valid entry type.");
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Amount must be greater than 0.");
+  }
+
+  const { data: customer, error: customerError } = await supabase
+    .from("customers")
+    .select("id")
+    .eq("id", payload.customer_id)
+    .eq("store_id", storeId)
+    .maybeSingle();
+
+  if (customerError) {
+    throw new Error(customerError.message);
+  }
+
+  if (!customer) {
+    throw new Error("Customer not found in this store.");
+  }
 
   const { data, error } = await supabase
     .from("ledger_entries")

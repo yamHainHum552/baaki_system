@@ -80,10 +80,12 @@ export default async function CustomerLedgerPage({
   return (
     <div className="section-spacing pb-24 md:pb-0">
       <CustomerLedgerHeader
+        customerId={id}
         customerName={customer.name}
         customerPhone={customer.phone}
         customerAddress={customer.address}
         currentBalance={currentBalance}
+        canManageLedger={canManageLedger}
         riskLevel={insights.risk_level}
         lastPaymentDate={insights.last_payment_date}
         daysSinceLastPayment={insights.days_since_last_payment}

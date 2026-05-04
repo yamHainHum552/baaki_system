@@ -171,6 +171,61 @@ export async function createLedgerEntryAction(formData: FormData) {
   revalidatePath("/customers");
 }
 
+export async function quickPaymentAction(formData: FormData) {
+  const { supabase, store } = await requireStorePermission(
+    "manage_ledger",
+    "/customers?error=You%20do%20not%20have%20permission%20to%20write%20ledger%20entries",
+  );
+
+  const customerId = String(formData.get("customer_id") ?? "");
+
+  if (!customerId) {
+    redirect("/customers?error=Customer%20is%20required");
+  }
+
+  try {
+    const { data: balanceRow, error: balanceError } = await supabase
+      .from("customer_balances")
+      .select("balance")
+      .eq("store_id", store.id)
+      .eq("customer_id", customerId)
+      .maybeSingle();
+
+    if (balanceError) {
+      throw new Error(balanceError.message);
+    }
+
+    if (!balanceRow) {
+      throw new Error("Customer not found in this store.");
+    }
+
+    const amount = Number(balanceRow.balance ?? 0);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("There is no baaki left to pay.");
+    }
+
+    await createLedgerEntry(supabase, store.id, {
+      customer_id: customerId,
+      type: "PAYMENT",
+      amount,
+      description: "Quick payment - full due",
+      created_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to record quick payment.";
+    redirect(`/customers/${customerId}?error=${encodeURIComponent(message)}`);
+  }
+
+  clearCache(`dashboard:${store.id}`);
+  clearCache(`customers:${store.id}`);
+  revalidatePath(`/customers/${customerId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/customers");
+  redirect(`/customers/${customerId}?message=${encodeURIComponent("Quick payment recorded")}`);
+}
+
 export async function switchStoreAction(formData: FormData) {
   const { supabase, userId } = await requireStoreContext();
   const storeId = String(formData.get("store_id") ?? "");

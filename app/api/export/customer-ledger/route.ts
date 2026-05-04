@@ -3,6 +3,7 @@ import { incrementStoreUsage, requireFeatureAccess } from "@/lib/entitlements";
 import { logSubscriptionEvent } from "@/lib/billing";
 import { getCustomerLedger } from "@/lib/baaki";
 import { getStoreContextForApiWithPermission } from "@/lib/auth";
+import { contentDisposition } from "@/lib/http";
 import { toPremiumErrorPayload } from "@/lib/premium-errors";
 import { customerLedgerToCsv, customerLedgerToPrintableHtml } from "@/lib/export";
 
@@ -20,6 +21,10 @@ export async function GET(request: Request) {
 
     if (!customerId) {
       return NextResponse.json({ error: "customerId is required." }, { status: 400 });
+    }
+
+    if (format !== "csv" && format !== "pdf") {
+      return NextResponse.json({ error: "format must be csv or pdf." }, { status: 400 });
     }
 
     await requireFeatureAccess({
@@ -47,7 +52,7 @@ export async function GET(request: Request) {
       return new NextResponse(html, {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
-          "Content-Disposition": `inline; filename="${ledger.customer.name}-ledger.html"`
+          "Content-Disposition": contentDisposition("inline", `${ledger.customer.name}-ledger.html`)
         }
       });
     }
@@ -63,7 +68,7 @@ export async function GET(request: Request) {
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${ledger.customer.name}-ledger.csv"`
+        "Content-Disposition": contentDisposition("attachment", `${ledger.customer.name}-ledger.csv`)
       }
     });
   } catch (error) {

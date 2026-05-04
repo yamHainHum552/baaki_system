@@ -247,6 +247,33 @@ create table if not exists public.ledger_entries (
   created_at timestamptz not null default now()
 );
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'customers_id_store_id_key'
+      and conrelid = 'public.customers'::regclass
+  ) then
+    alter table public.customers
+      add constraint customers_id_store_id_key unique (id, store_id);
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'ledger_entries_customer_store_fk'
+      and conrelid = 'public.ledger_entries'::regclass
+  ) then
+    alter table public.ledger_entries
+      add constraint ledger_entries_customer_store_fk
+      foreign key (customer_id, store_id)
+      references public.customers(id, store_id)
+      on delete cascade
+      not valid;
+  end if;
+end $$;
+
 create table if not exists public.customer_share_tokens (
   id uuid primary key default gen_random_uuid(),
   customer_id uuid not null references public.customers(id) on delete cascade,
@@ -436,6 +463,30 @@ begin
     from public.store_memberships sm
     where sm.user_id = auth.uid()
       and sm.store_id = public.current_store_id()
+      and (
+        sm.role = p_role
+        or sm.role = 'OWNER'
+      )
+  );
+end;
+$$;
+
+create or replace function public.has_store_role_for_store(
+  p_store_id uuid,
+  p_role public.store_role
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  return exists (
+    select 1
+    from public.store_memberships sm
+    where sm.user_id = auth.uid()
+      and sm.store_id = p_store_id
       and (
         sm.role = p_role
         or sm.role = 'OWNER'
@@ -792,7 +843,7 @@ select
   )::numeric(12, 2) as balance,
   max(l.created_at) as last_entry_at
 from public.customers c
-left join public.ledger_entries l on l.customer_id = c.id
+left join public.ledger_entries l on l.customer_id = c.id and l.store_id = c.store_id
 group by c.store_id, c.id, c.name, c.phone, c.address;
 
 create or replace function public.get_customer_ledger(p_customer_id uuid)
@@ -1394,8 +1445,24 @@ create policy "Store owners can update their store"
 on public.stores
 for update
 to authenticated
-using (public.has_store_role('OWNER'))
-with check (public.has_store_role('OWNER'));
+using (
+  exists (
+    select 1
+    from public.store_memberships sm
+    where sm.user_id = auth.uid()
+      and sm.store_id = stores.id
+      and sm.role = 'OWNER'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.store_memberships sm
+    where sm.user_id = auth.uid()
+      and sm.store_id = stores.id
+      and sm.role = 'OWNER'
+  )
+);
 
 drop policy if exists "Users can view their own profile" on public.profiles;
 create policy "Users can view their own profile"
@@ -1429,8 +1496,8 @@ create policy "Owners can manage memberships"
 on public.store_memberships
 for all
 to authenticated
-using (public.has_store_role('OWNER'))
-with check (public.has_store_role('OWNER'));
+using (public.has_store_role_for_store(store_id, 'OWNER'))
+with check (public.has_store_role_for_store(store_id, 'OWNER'));
 
 drop policy if exists "Customers belong to current store" on public.customers;
 create policy "Customers belong to current store"
@@ -1460,8 +1527,24 @@ create policy "Owners manage subscriptions"
 on public.subscriptions
 for all
 to authenticated
-using (public.has_store_role('OWNER'))
-with check (public.has_store_role('OWNER'));
+using (
+  exists (
+    select 1
+    from public.store_memberships sm
+    where sm.user_id = auth.uid()
+      and sm.store_id = subscriptions.store_id
+      and sm.role = 'OWNER'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.store_memberships sm
+    where sm.user_id = auth.uid()
+      and sm.store_id = subscriptions.store_id
+      and sm.role = 'OWNER'
+  )
+);
 
 drop policy if exists "Owners manage upgrade requests" on public.subscription_upgrade_requests;
 create policy "Owners manage upgrade requests"

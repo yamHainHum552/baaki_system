@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCustomerLedger } from "@/lib/baaki";
 import { getStoreContextForApi } from "@/lib/auth";
+import { parsePositiveInt } from "@/lib/http";
 
 export async function GET(
   _request: Request,
@@ -13,8 +14,8 @@ export async function GET(
       return NextResponse.json({ error: context.error }, { status: context.status });
     }
     const url = new URL(_request.url);
-    const page = Number(url.searchParams.get("page") ?? "1");
-    const pageSize = Number(url.searchParams.get("pageSize") ?? "50");
+    const page = parsePositiveInt(url.searchParams.get("page"), 1, { max: 10000 });
+    const pageSize = parsePositiveInt(url.searchParams.get("pageSize"), 50, { max: 200 });
     const ledger = await getCustomerLedger(context.supabase, customerId, {
       page,
       pageSize,

@@ -1,22 +1,28 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { RiskBadge } from "@/components/risk-badge";
+import { SubmitButton } from "@/components/submit-button";
+import { quickPaymentAction } from "@/app/actions";
 import { formatCurrency, formatDays, formatLongDate } from "@/lib/utils";
 
 export function CustomerLedgerHeader({
+  customerId,
   customerName,
   customerPhone,
   customerAddress,
   currentBalance,
+  canManageLedger,
   riskLevel,
   lastPaymentDate,
   daysSinceLastPayment,
   actions,
 }: {
+  customerId: string;
   customerName: string;
   customerPhone: string | null;
   customerAddress: string | null;
   currentBalance: number;
+  canManageLedger: boolean;
   riskLevel: "LOW" | "MEDIUM" | "HIGH" | null;
   lastPaymentDate: string | null;
   daysSinceLastPayment: number | null;
@@ -65,12 +71,28 @@ export function CustomerLedgerHeader({
 
         <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-[1.25fr_1fr_1fr_0.9fr]">
           <div className="soft-panel px-3.5 py-3.5 sm:px-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/45">
-              Current baaki
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-khata sm:text-[2rem]">
-              {formatCurrency(currentBalance)}
-            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+                  Current baaki
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-khata sm:text-[2rem]">
+                  {formatCurrency(currentBalance)}
+                </p>
+              </div>
+
+              {canManageLedger ? (
+                <form action={quickPaymentAction} className="w-full sm:w-auto">
+                  <input type="hidden" name="customer_id" value={customerId} />
+                  <SubmitButton
+                    idle={currentBalance > 0 ? "Quick payment" : "Settled"}
+                    pending="Recording..."
+                    disabled={currentBalance <= 0}
+                    className="w-full rounded-2xl bg-moss px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:-translate-y-px hover:bg-moss/90 disabled:cursor-not-allowed disabled:bg-ink/20 disabled:text-ink/45 disabled:shadow-none sm:w-auto"
+                  />
+                </form>
+              ) : null}
+            </div>
           </div>
 
           <div className="soft-panel px-3.5 py-3.5 sm:px-4">

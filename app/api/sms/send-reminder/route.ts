@@ -3,6 +3,7 @@ import { incrementStoreUsage, requireFeatureAccess } from "@/lib/entitlements";
 import { logSubscriptionEvent } from "@/lib/billing";
 import { getCustomerLedger } from "@/lib/baaki";
 import { getStoreContextForApiWithPermission } from "@/lib/auth";
+import { parseJsonObject } from "@/lib/http";
 import { toPremiumErrorPayload } from "@/lib/premium-errors";
 import { buildReminderMessage, sendSMS, type ReminderTemplate } from "@/lib/sms";
 
@@ -19,11 +20,18 @@ export async function POST(request: Request) {
       feature: "sms_reminders",
     });
 
-    const body = await request.json();
-    const template = ["polite", "due_today", "final"].includes(body.template)
-      ? (body.template as ReminderTemplate)
+    const body = parseJsonObject(await request.json());
+    const requestedTemplate = typeof body.template === "string" ? body.template : "";
+    const customerId = typeof body.customer_id === "string" ? body.customer_id : "";
+
+    if (!customerId) {
+      return NextResponse.json({ error: "customer_id is required." }, { status: 400 });
+    }
+
+    const template = ["polite", "due_today", "final"].includes(requestedTemplate)
+      ? (requestedTemplate as ReminderTemplate)
       : "polite";
-    const ledger = await getCustomerLedger(context.supabase, body.customer_id, {
+    const ledger = await getCustomerLedger(context.supabase, customerId, {
       riskThreshold: context.store.risk_threshold
     });
 

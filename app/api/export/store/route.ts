@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStoreContextForApiWithPermission } from "@/lib/auth";
 import { incrementStoreUsage, requireFeatureAccess } from "@/lib/entitlements";
 import { storeBackupToCsv, storeBackupToPrintableHtml } from "@/lib/export";
+import { contentDisposition } from "@/lib/http";
 
 export async function GET(request: Request) {
   try {
@@ -11,6 +12,10 @@ export async function GET(request: Request) {
     }
     const url = new URL(request.url);
     const format = url.searchParams.get("format") ?? "csv";
+
+    if (format !== "csv" && format !== "html" && format !== "pdf") {
+      return NextResponse.json({ error: "format must be csv, html, or pdf." }, { status: 400 });
+    }
 
     await requireFeatureAccess({
       supabase: context.supabase,
@@ -57,7 +62,7 @@ export async function GET(request: Request) {
       return new NextResponse(html, {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
-          "Content-Disposition": `inline; filename="${context.store.name}-store-backup.html"`,
+          "Content-Disposition": contentDisposition("inline", `${context.store.name}-store-backup.html`),
         },
       });
     }
@@ -67,7 +72,7 @@ export async function GET(request: Request) {
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${context.store.name}-store-backup.csv"`,
+        "Content-Disposition": contentDisposition("attachment", `${context.store.name}-store-backup.csv`),
       },
     });
   } catch (error) {

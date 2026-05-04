@@ -6,6 +6,7 @@ import {
   getStoreContextForApiWithPermission,
 } from "@/lib/auth";
 import { clearCache } from "@/lib/cache";
+import { parseJsonObject, parsePositiveInt } from "@/lib/http";
 import { toPremiumErrorPayload } from "@/lib/premium-errors";
 
 export async function GET(request: Request) {
@@ -19,8 +20,8 @@ export async function GET(request: Request) {
       context.supabase,
       context.store.id,
       {
-        page: Number(url.searchParams.get("page") ?? "1"),
-        pageSize: Number(url.searchParams.get("pageSize") ?? "20"),
+        page: parsePositiveInt(url.searchParams.get("page"), 1, { max: 10000 }),
+        pageSize: parsePositiveInt(url.searchParams.get("pageSize"), 20, { max: 100 }),
         search: url.searchParams.get("q") ?? undefined,
         riskThreshold: context.store.risk_threshold,
       },
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     if ("error" in context) {
       return NextResponse.json({ error: context.error }, { status: context.status });
     }
-    const body = await request.json();
+    const body = parseJsonObject(await request.json());
     const customer = await createCustomer(context.supabase, context.store.id, body);
     clearCache(`dashboard:${context.store.id}`);
     clearCache(`customers:${context.store.id}`);
